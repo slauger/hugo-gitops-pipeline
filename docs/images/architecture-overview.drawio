@@ -1,0 +1,23 @@
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="Mozilla/5.0" version="22.1.0" etag="placeholder" type="device">
+  <diagram name="Architecture" id="architecture-overview">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- TODO: Design architecture diagram -->
+        <!-- Components to include:
+             - Developer (git push)
+             - GitHub (Source Repo, Actions, GitOps Repo)
+             - gitops-image-replacer
+             - Hetzner Cloud
+               - K3S Cluster (Flatcar Linux)
+               - ArgoCD
+               - Docker Registry (S3 Backend)
+               - Environments (Dev, Staging, Production)
+               - Ingress
+             - Users
+        -->
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

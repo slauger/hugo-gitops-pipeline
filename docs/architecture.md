@@ -4,70 +4,9 @@ A complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud - fully self-host
 
 ## Architecture Overview
 
-```mermaid
-flowchart TB
-    subgraph DEV["👨‍💻 Developer"]
-        Dev[Developer]
-    end
+![Architecture Overview](./images/architecture-overview.svg)
 
-    subgraph GH["GitHub"]
-        Repo["Hugo Source Repository"]
-        Actions["GitHub Actions<br/>(hugo-gitops-pipeline)"]
-        GitOpsRepo["GitOps Repository"]
-    end
-
-    subgraph PIPELINE["CI/CD Pipeline"]
-        direction TB
-        Build["1. Build Hugo Site"]
-        Docker["2. Build Docker Image"]
-        Push["3. Push to Registry"]
-        Update["4. Update GitOps Repo<br/>(gitops-image-replacer)"]
-    end
-
-    subgraph HETZNER["☁️ Hetzner Cloud (Germany)"]
-        subgraph K8S["Kubernetes Cluster (Flatcar + K3S)"]
-            ArgoCD["ArgoCD<br/>(App of Apps)"]
-
-            subgraph ENVS["Environments"]
-                direction LR
-                subgraph STAGING["Staging"]
-                    StagingApp["hugo-nginx<br/>staging-latest"]
-                end
-                subgraph PROD["Production"]
-                    ProdApp["hugo-nginx<br/>prod-latest"]
-                end
-            end
-
-            Registry["Docker Registry<br/>(S3 Backend)"]
-            Ingress["Ingress Controller"]
-        end
-        S3["Hetzner Object Storage"]
-    end
-
-    subgraph USERS["🌐 Users"]
-        StagingUsers["Internal Testers<br/>staging.example.com"]
-        ProdUsers["Public Users<br/>www.example.com"]
-    end
-
-    Dev -->|"git push<br/>develop"| Repo
-    Dev -->|"git push<br/>main"| Repo
-    Repo --> Actions
-    Actions --> Build --> Docker --> Push --> Update
-    Push -->|"staging-*<br/>prod-*"| Registry
-    Update -->|"GitHub App"| GitOpsRepo
-    Registry <--> S3
-    GitOpsRepo -->|"sync"| ArgoCD
-    ArgoCD --> StagingApp
-    ArgoCD --> ProdApp
-    StagingApp --> Ingress
-    ProdApp --> Ingress
-    Ingress --> StagingUsers
-    Ingress --> ProdUsers
-
-    style STAGING fill:#fff3cd
-    style PROD fill:#d4edda
-    style HETZNER fill:#e8f4f8
-```
+<!-- TODO: Create with draw.io and export as SVG -->
 
 ## Multi-Environment Workflow
 
