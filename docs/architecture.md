@@ -4,70 +4,142 @@ A complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud - fully self-host
 
 ## Architecture Overview
 
+```mermaid
+flowchart TB
+    subgraph DEV["👨‍💻 Developer"]
+        Dev[Developer]
+    end
+
+    subgraph GH["GitHub"]
+        Repo["Hugo Source Repository"]
+        Actions["GitHub Actions<br/>(hugo-gitops-pipeline)"]
+        GitOpsRepo["GitOps Repository"]
+    end
+
+    subgraph PIPELINE["CI/CD Pipeline"]
+        direction TB
+        Build["1. Build Hugo Site"]
+        Docker["2. Build Docker Image"]
+        Push["3. Push to Registry"]
+        Update["4. Update GitOps Repo<br/>(gitops-image-replacer)"]
+    end
+
+    subgraph HETZNER["☁️ Hetzner Cloud (Germany)"]
+        subgraph K8S["Kubernetes Cluster (Flatcar + K3S)"]
+            ArgoCD["ArgoCD<br/>(App of Apps)"]
+
+            subgraph ENVS["Environments"]
+                direction LR
+                subgraph STAGING["Staging"]
+                    StagingApp["hugo-nginx<br/>staging-latest"]
+                end
+                subgraph PROD["Production"]
+                    ProdApp["hugo-nginx<br/>prod-latest"]
+                end
+            end
+
+            Registry["Docker Registry<br/>(S3 Backend)"]
+            Ingress["Ingress Controller"]
+        end
+        S3["Hetzner Object Storage"]
+    end
+
+    subgraph USERS["🌐 Users"]
+        StagingUsers["Internal Testers<br/>staging.example.com"]
+        ProdUsers["Public Users<br/>www.example.com"]
+    end
+
+    Dev -->|"git push<br/>develop"| Repo
+    Dev -->|"git push<br/>main"| Repo
+    Repo --> Actions
+    Actions --> Build --> Docker --> Push --> Update
+    Push -->|"staging-*<br/>prod-*"| Registry
+    Update -->|"GitHub App"| GitOpsRepo
+    Registry <--> S3
+    GitOpsRepo -->|"sync"| ArgoCD
+    ArgoCD --> StagingApp
+    ArgoCD --> ProdApp
+    StagingApp --> Ingress
+    ProdApp --> Ingress
+    Ingress --> StagingUsers
+    Ingress --> ProdUsers
+
+    style STAGING fill:#fff3cd
+    style PROD fill:#d4edda
+    style HETZNER fill:#e8f4f8
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DEVELOPER WORKFLOW                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌──────────┐     git push      ┌──────────────────┐                      │
-│   │Developer │ ─────────────────▶│  GitHub Repo     │                      │
-│   └──────────┘                   │  (Hugo Source)   │                      │
-│                                  └────────┬─────────┘                      │
-│                                           │                                 │
-│                                           ▼                                 │
-│                           ┌───────────────────────────────┐                │
-│                           │  GitHub Actions               │                │
-│                           │  (hugo-gitops-pipeline)       │                │
-│                           │                               │                │
-│                           │  1. Build Hugo Site           │                │
-│                           │  2. Build Docker Image        │                │
-│                           │  3. Push to Registry          │                │
-│                           │  4. Update GitOps Repo        │                │
-│                           └───────────────┬───────────────┘                │
-│                                           │                                 │
-│                    ┌──────────────────────┼──────────────────────┐         │
-│                    │                      │                      │         │
-│                    ▼                      ▼                      ▼         │
-│   ┌────────────────────────┐  ┌─────────────────────┐  ┌───────────────┐  │
-│   │  Container Registry    │  │  GitOps Repository  │  │ gitops-image- │  │
-│   │  (Hetzner S3 Backend)  │  │  (ArgoCD Source)    │◀─│ replacer      │  │
-│   └────────────────────────┘  └──────────┬──────────┘  └───────────────┘  │
-│                                          │                                 │
-└──────────────────────────────────────────┼─────────────────────────────────┘
-                                           │
-┌──────────────────────────────────────────┼─────────────────────────────────┐
-│                            KUBERNETES CLUSTER                              │
-│                        (Flatcar Linux + K3S on Hetzner)                    │
-├──────────────────────────────────────────┼─────────────────────────────────┤
-│                                          │                                 │
-│                                          ▼                                 │
-│                           ┌───────────────────────────┐                    │
-│                           │        ArgoCD             │                    │
-│                           │    (App of Apps)          │                    │
-│                           └─────────────┬─────────────┘                    │
-│                                         │                                  │
-│              ┌──────────────────────────┼──────────────────────────┐      │
-│              │                          │                          │      │
-│              ▼                          ▼                          ▼      │
-│   ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐ │
-│   │  Hugo Site       │     │  Docker Registry │     │  Other Apps      │ │
-│   │  (hugo-nginx)    │     │  (hcloud-registry│     │  ...             │ │
-│   │                  │     │   + S3 backend)  │     │                  │ │
-│   └──────────────────┘     └──────────────────┘     └──────────────────┘ │
-│              │                                                            │
-│              ▼                                                            │
-│   ┌──────────────────┐                                                   │
-│   │  Ingress         │                                                   │
-│   │  (Traefik/nginx) │                                                   │
-│   └────────┬─────────┘                                                   │
-│            │                                                              │
-└────────────┼──────────────────────────────────────────────────────────────┘
-             │
-             ▼
-      ┌─────────────┐
-      │   Users     │
-      │  (Browser)  │
-      └─────────────┘
+
+## Multi-Environment Workflow
+
+```mermaid
+flowchart LR
+    subgraph Branches
+        feature["feature/*"]
+        develop["develop"]
+        main["main"]
+    end
+
+    subgraph Environments
+        dev["🔧 Dev<br/>(optional)"]
+        staging["🧪 Staging"]
+        prod["🚀 Production"]
+    end
+
+    subgraph Images
+        devImg["mysite:dev-abc123"]
+        stagingImg["mysite:staging-def456"]
+        prodImg["mysite:prod-ghi789"]
+    end
+
+    feature -->|"PR"| develop
+    develop -->|"merge"| main
+
+    feature -.->|"optional"| dev
+    develop -->|"auto deploy"| staging
+    main -->|"auto deploy"| prod
+
+    dev --- devImg
+    staging --- stagingImg
+    prod --- prodImg
+
+    style dev fill:#e3f2fd
+    style staging fill:#fff3cd
+    style prod fill:#d4edda
+```
+
+## Configuration (project.json)
+
+The `project.json` in your Hugo repository defines which branch deploys to which environment:
+
+```json
+{
+  "environments": {
+    "dev": {
+      "when": "^refs/heads/feature/.*$",
+      "baseurl": "https://dev.example.com",
+      "gitops": {
+        "repository": "myorg/gitops",
+        "file": "apps/mysite/values-dev.yaml"
+      }
+    },
+    "staging": {
+      "when": "^refs/heads/develop$",
+      "baseurl": "https://staging.example.com",
+      "gitops": {
+        "repository": "myorg/gitops",
+        "file": "apps/mysite/values-staging.yaml"
+      }
+    },
+    "production": {
+      "when": "^refs/heads/main$",
+      "baseurl": "https://www.example.com",
+      "gitops": {
+        "repository": "myorg/gitops",
+        "file": "apps/mysite/values-prod.yaml"
+      }
+    }
+  }
+}
 ```
 
 ## Components
