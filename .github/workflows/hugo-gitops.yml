@@ -28,9 +28,9 @@ on:
         required: true
 
 env:
-  # Updated automatically by build-images.yml
-  BUILDER_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/builder:0.145.0
-  RUNTIME_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/runtime:1.27
+  # Updated automatically by build-images.yml after each release
+  BUILDER_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/builder:latest
+  RUNTIME_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/runtime:latest
 
 jobs:
   detect-environment:

@@ -12,13 +12,17 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      packages: write
+
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,6 +34,25 @@ jobs:
         run: npm ci
 
       - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+
+      - name: Release info
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "## Release v${{ steps.semantic.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "New release published!" >> $GITHUB_STEP_SUMMARY
+
+  build-images:
+    name: Build Images
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    uses: ./.github/workflows/build-images.yml
+    with:
+      version: ${{ needs.release.outputs.new_release_version }}
+    permissions:
+      contents: write
+      packages: write

@@ -1,11 +1,18 @@
 name: Build Images
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'images/**'
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to tag images with (e.g. 1.0.0)'
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag images with (e.g. 1.0.0)'
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -18,19 +25,9 @@ jobs:
       contents: read
       packages: write
 
-    outputs:
-      tag: ${{ steps.meta.outputs.version }}
-      digest: ${{ steps.build.outputs.digest }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Extract Hugo version
-        id: hugo
-        run: |
-          HUGO_VERSION=$(grep -oP 'ARG HUGO_VERSION=\K[\d.]+' images/builder/Dockerfile)
-          echo "version=${HUGO_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -48,11 +45,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}/builder
           tags: |
-            type=raw,value=${{ steps.hugo.outputs.version }}
+            type=raw,value=v${{ inputs.version }}
             type=raw,value=latest
 
       - name: Build and push
-        id: build
         uses: docker/build-push-action@v5
         with:
           context: images/builder
@@ -69,19 +65,9 @@ jobs:
       contents: read
       packages: write
 
-    outputs:
-      tag: ${{ steps.nginx.outputs.version }}
-      digest: ${{ steps.build.outputs.digest }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Extract nginx version
-        id: nginx
-        run: |
-          NGINX_VERSION=$(grep -oP 'FROM nginx:\K[\d.]+' images/runtime/Dockerfile)
-          echo "version=${NGINX_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -99,11 +85,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}/runtime
           tags: |
-            type=raw,value=${{ steps.nginx.outputs.version }}
+            type=raw,value=v${{ inputs.version }}
             type=raw,value=latest
 
       - name: Build and push
-        id: build
         uses: docker/build-push-action@v5
         with:
           context: images/runtime
@@ -119,9 +104,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout code
@@ -143,11 +125,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}/cleanup
           tags: |
-            type=sha,format=short
+            type=raw,value=v${{ inputs.version }}
             type=raw,value=latest
 
       - name: Build and push
-        id: build
         uses: docker/build-push-action@v5
         with:
           context: images/cleanup
@@ -170,8 +151,9 @@ jobs:
 
       - name: Update image references in workflow
         run: |
-          BUILDER_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/builder:${{ needs.build-builder.outputs.tag }}"
-          RUNTIME_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/runtime:${{ needs.build-runtime.outputs.tag }}"
+          VERSION="v${{ inputs.version }}"
+          BUILDER_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/builder:${VERSION}"
+          RUNTIME_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/runtime:${VERSION}"
 
           sed -i "s|BUILDER_IMAGE:.*|BUILDER_IMAGE: ${BUILDER_IMAGE}|g" .github/workflows/hugo-gitops.yml
           sed -i "s|RUNTIME_IMAGE:.*|RUNTIME_IMAGE: ${RUNTIME_IMAGE}|g" .github/workflows/hugo-gitops.yml
@@ -181,5 +163,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/hugo-gitops.yml
-          git diff --staged --quiet || git commit -m "chore: update image references"
+          git diff --staged --quiet || git commit -m "chore: update image references to v${{ inputs.version }}"
           git push
