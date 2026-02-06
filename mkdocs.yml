@@ -1,0 +1,62 @@
+site_name: Hugo GitOps Pipeline
+site_description: A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment
+site_author: Simon Lauger
+site_url: https://slauger.github.io/hugo-gitops-pipeline
+
+repo_name: slauger/hugo-gitops-pipeline
+repo_url: https://github.com/slauger/hugo-gitops-pipeline
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - toc.follow
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: getting-started.md
+    - Configuration: configuration.md
+    - Environments: environments.md
+  - Reference:
+    - Architecture: architecture.md
+    - Images: images.md
+    - Registry Cleanup: cleanup.md
+  - About:
+    - Related Projects: related-projects.md
+    - Cost Estimation: costs.md

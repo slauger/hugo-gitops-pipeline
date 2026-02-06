@@ -16,22 +16,12 @@ flowchart LR
         prod["Production"]
     end
 
-    subgraph Images
-        devImg["mysite:dev-abc123"]
-        stagingImg["mysite:staging-def456"]
-        prodImg["mysite:prod-ghi789"]
-    end
-
     feature -->|"PR"| develop
     develop -->|"merge"| main
 
     feature -.->|"optional"| dev
     develop -->|"auto deploy"| staging
     main -->|"auto deploy"| prod
-
-    dev --- devImg
-    staging --- stagingImg
-    prod --- prodImg
 
     classDef devStyle fill:#1e88e5,stroke:#1565c0,color:#fff
     classDef stagingStyle fill:#fb8c00,stroke:#ef6c00,color:#fff
@@ -42,65 +32,34 @@ flowchart LR
     class prod prodStyle
 ```
 
-> **New to this project?** Check out the [Reference Architecture](docs/architecture.md) for a complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud.
-
-## Features
-
-- **Zero-config builds**: Just add a `project.json` and go
-- **Multi-environment support**: dev, staging, qa, production - as many as you need
-- **GitOps deployment**: Automatic image updates via [gitops-image-replacer](https://github.com/slauger/gitops-image-replacer)
-- **Automated updates**: Renovate keeps Hugo, nginx, and all dependencies current
-- **Semantic versioning**: Automatic releases with semantic-release
-
 ## Quick Start
 
-### 1. Create `project.json` in your Hugo project
+**1. Add `project.json` to your Hugo repo:**
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/slauger/hugo-gitops-pipeline/main/schemas/project.schema.json",
-
-  "hugo": {
-    "source": "hugo"
-  },
-
-  "copy": [
-    {"from": "node_modules/photoswipe/dist/", "to": "hugo/static/libs/photoswipe/"}
-  ],
-
   "environments": {
     "staging": {
       "when": "^refs/heads/develop$",
       "baseurl": "https://staging.example.com",
-      "gitops": {
-        "repository": "myorg/gitops",
-        "branch": "main",
-        "file": "apps/mysite/values-staging.yaml"
-      }
+      "gitops": { "repository": "myorg/gitops", "file": "apps/mysite/values-staging.yaml" }
     },
     "production": {
       "when": "^refs/heads/main$",
       "baseurl": "https://www.example.com",
-      "gitops": {
-        "repository": "myorg/gitops",
-        "branch": "main",
-        "file": "apps/mysite/values-prod.yaml"
-      }
+      "gitops": { "repository": "myorg/gitops", "file": "apps/mysite/values-prod.yaml" }
     }
   }
 }
 ```
 
-### 2. Create `.github/workflows/ci-cd.yml`
+**2. Add workflow `.github/workflows/ci-cd.yml`:**
 
 ```yaml
-name: CI/CD Pipeline
-
+name: CI/CD
 on:
   push:
     branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
 
 jobs:
   pipeline:
@@ -111,166 +70,16 @@ jobs:
     secrets: inherit
 ```
 
-### 3. Configure secrets
+**3. Configure secrets and push.**
 
-Add these secrets to your repository:
+## Documentation
 
-| Secret | Description |
-|--------|-------------|
-| `REGISTRY_USERNAME` | Container registry username |
-| `REGISTRY_PASSWORD` | Container registry password |
-| `GITOPS_APP_ID` | GitHub App ID for GitOps repo access |
-| `GITOPS_APP_PRIVATE_KEY` | GitHub App private key |
-
-### Passing secrets to the workflow
-
-GitHub Actions provides two ways to pass secrets to reusable workflows:
-
-**Option A: `secrets: inherit` (simple)**
-
-Passes all secrets from the calling repository to the reusable workflow automatically.
-
-```yaml
-jobs:
-  pipeline:
-    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
-    with:
-      registry: registry.example.com
-      image_name: my-hugo-site
-    secrets: inherit
-```
-
-**Option B: Explicit secrets (more control)**
-
-Explicitly pass only the required secrets. More verbose but clearer about what is shared.
-
-```yaml
-jobs:
-  pipeline:
-    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
-    with:
-      registry: registry.example.com
-      image_name: my-hugo-site
-    secrets:
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      GITOPS_APP_ID: ${{ secrets.GITOPS_APP_ID }}
-      GITOPS_APP_PRIVATE_KEY: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
-```
-
-See [GitHub Docs: Using secrets in a reusable workflow](https://docs.github.com/en/actions/sharing-automations/reusing-workflows#using-inputs-and-secrets-in-a-reusable-workflow) for more details.
-
-## Configuration
-
-### project.json
-
-| Section | Description |
-|---------|-------------|
-| `hugo` | Hugo source directory and config file |
-| `copy` | Assets to copy before build (npm packages, images, etc.) |
-| `lint` | Enable/disable linting tools |
-| `nginx` | Custom nginx config snippets directory |
-| `environments` | Branch → environment mapping with GitOps config |
-
-### Environments
-
-Each environment supports:
-
-| Field | Description |
-|-------|-------------|
-| `when` | Regex pattern to match `GITHUB_REF` |
-| `baseurl` | Hugo `--baseURL` value |
-| `robots` | robots.txt directive |
-| `approval_required` | Require manual approval |
-| `gitops.repository` | GitOps repo (owner/repo) |
-| `gitops.branch` | Target branch |
-| `gitops.file` | Values file to update |
-
-### Custom nginx config
-
-Place nginx config snippets in a `nginx/` directory:
-
-```
-nginx/
-  redirects.conf
-  headers.conf
-  cache.conf
-```
-
-These are automatically included in the runtime image.
-
-## Images
-
-| Image | Description |
-|-------|-------------|
-| `ghcr.io/slauger/hugo-gitops-pipeline/builder` | Node.js + Hugo extended |
-| `ghcr.io/slauger/hugo-gitops-pipeline/runtime` | Hardened nginx |
-| `ghcr.io/slauger/hugo-gitops-pipeline/cleanup` | Registry cleanup tool |
-
-## Registry Cleanup
-
-The cleanup image helps manage old container images in your registry. It uses [regctl](https://github.com/regclient/regclient) under the hood.
-
-### Configuration
-
-Create a `config.yaml` with retention rules:
-
-```yaml
-registry: registry.example.com
-
-retention:
-  default:
-    keep_latest: 10
-    keep_days: 30
-
-  rules:
-    - image: my-hugo-site
-      keep_latest: 5
-      keep_tags:
-        - "prod-latest"
-        - "staging-latest"
-```
-
-### Run manually
-
-```bash
-# Dry run (default)
-docker run -v $(pwd)/config.yaml:/config/config.yaml \
-  -e REGISTRY_USERNAME=user \
-  -e REGISTRY_PASSWORD=pass \
-  ghcr.io/slauger/hugo-gitops-pipeline/cleanup:latest
-
-# Actually delete
-docker run -v $(pwd)/config.yaml:/config/config.yaml \
-  -e REGISTRY_USERNAME=user \
-  -e REGISTRY_PASSWORD=pass \
-  -e DRY_RUN=false \
-  ghcr.io/slauger/hugo-gitops-pipeline/cleanup:latest
-```
-
-### Kubernetes CronJob
-
-See [examples/cleanup-cronjob.yaml](examples/cleanup-cronjob.yaml) for a complete example that can be deployed via ArgoCD.
-
-## Reference Architecture
-
-For a complete, production-ready setup including:
-
-- Flatcar Linux + K3S on Hetzner Cloud
-- ArgoCD with App-of-Apps pattern
-- Self-hosted Docker Registry with S3 backend
-- GDPR-compliant hosting (100% Germany)
-- Cost estimations
-
-See [docs/architecture.md](docs/architecture.md)
-
-## Related Projects
-
-| Project | Description |
-|---------|-------------|
-| [slauger/flatcar-hcloud](https://github.com/slauger/flatcar-hcloud) | Flatcar Linux + K3S on Hetzner |
-| [slauger/gitops-image-replacer](https://github.com/slauger/gitops-image-replacer) | Update image refs in GitOps repos |
-| [slauger/helm-charts](https://github.com/slauger/helm-charts) | Helm charts (hugo-nginx, hcloud-registry) |
+| | |
+|---|---|
+| [Getting Started](https://slauger.github.io/hugo-gitops-pipeline/getting-started/) | Step-by-step setup guide |
+| [Configuration](https://slauger.github.io/hugo-gitops-pipeline/configuration/) | All `project.json` options |
+| [Environments](https://slauger.github.io/hugo-gitops-pipeline/environments/) | Multi-environment setup |
+| [Architecture](https://slauger.github.io/hugo-gitops-pipeline/architecture/) | GDPR-compliant reference architecture |
 
 ## License
 
