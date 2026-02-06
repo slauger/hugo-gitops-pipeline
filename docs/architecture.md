@@ -81,7 +81,16 @@ A complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud - fully self-host
 ```bash
 git clone https://github.com/slauger/flatcar-hcloud
 cd flatcar-hcloud
-terraform init && terraform apply
+
+# Build Flatcar image with Packer
+export HCLOUD_TOKEN="your-token"
+packer init .
+packer build .
+
+# Deploy with Terraform
+cd terraform
+terraform init
+terraform apply
 ```
 
 ### 2. Setup ArgoCD
