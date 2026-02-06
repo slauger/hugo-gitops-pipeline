@@ -1,7 +1,8 @@
 # Hugo Runtime Image
 # Hardened nginx for serving static Hugo sites
 
-FROM nginx:1.27-alpine
+# renovate: datasource=docker depName=nginx
+FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 
 LABEL maintainer="Simon Lauger <simon@lauger.de>"
 LABEL description="Hardened nginx for Hugo static sites"
