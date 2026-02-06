@@ -2,7 +2,7 @@
 # Contains Node.js, Hugo extended, and copy-assets CLI
 
 # renovate: datasource=docker depName=node
-FROM node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8
+FROM node:24-alpine@sha256:cd6fb7efa6490f039f3471a189214d5f548c11df1ff9e5b181aa49e22c14383e
 
 ARG HUGO_VERSION=0.155.2
 
