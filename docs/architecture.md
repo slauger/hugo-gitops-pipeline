@@ -80,9 +80,9 @@ flowchart LR
     end
 
     subgraph Environments
-        dev["🔧 Dev<br/>(optional)"]
-        staging["🧪 Staging"]
-        prod["🚀 Production"]
+        dev["Dev"]
+        staging["Staging"]
+        prod["Production"]
     end
 
     subgraph Images
@@ -102,9 +102,13 @@ flowchart LR
     staging --- stagingImg
     prod --- prodImg
 
-    style dev fill:#e3f2fd
-    style staging fill:#fff3cd
-    style prod fill:#d4edda
+    classDef devStyle fill:#1e88e5,stroke:#1565c0,color:#fff
+    classDef stagingStyle fill:#fb8c00,stroke:#ef6c00,color:#fff
+    classDef prodStyle fill:#43a047,stroke:#2e7d32,color:#fff
+
+    class dev devStyle
+    class staging stagingStyle
+    class prod prodStyle
 ```
 
 ## Configuration (project.json)

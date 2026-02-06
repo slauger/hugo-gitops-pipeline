@@ -2,6 +2,46 @@
 
 A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment.
 
+```mermaid
+flowchart LR
+    subgraph Branches
+        feature["feature/*"]
+        develop["develop"]
+        main["main"]
+    end
+
+    subgraph Environments
+        dev["Dev"]
+        staging["Staging"]
+        prod["Production"]
+    end
+
+    subgraph Images
+        devImg["mysite:dev-abc123"]
+        stagingImg["mysite:staging-def456"]
+        prodImg["mysite:prod-ghi789"]
+    end
+
+    feature -->|"PR"| develop
+    develop -->|"merge"| main
+
+    feature -.->|"optional"| dev
+    develop -->|"auto deploy"| staging
+    main -->|"auto deploy"| prod
+
+    dev --- devImg
+    staging --- stagingImg
+    prod --- prodImg
+
+    classDef devStyle fill:#1e88e5,stroke:#1565c0,color:#fff
+    classDef stagingStyle fill:#fb8c00,stroke:#ef6c00,color:#fff
+    classDef prodStyle fill:#43a047,stroke:#2e7d32,color:#fff
+
+    class dev devStyle
+    class staging stagingStyle
+    class prod prodStyle
+```
+
 > **New to this project?** Check out the [Reference Architecture](docs/architecture.md) for a complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud.
 
 ## Features
