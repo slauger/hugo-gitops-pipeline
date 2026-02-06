@@ -40,10 +40,19 @@ Use the JSON schema for validation and autocompletion in your editor:
   },
 
   "environments": {
+    "feature": {
+      "when": "^refs/heads/feature/.*$",
+      "environment": "development",
+      "baseurl": "https://dev.example.com",
+      "gitops": {
+        "repository": "myorg/gitops",
+        "branch": "main",
+        "file": "apps/mysite/values-dev.yaml"
+      }
+    },
     "staging": {
       "when": "^refs/heads/develop$",
-      "baseurl": "https://staging.example.com",
-      "robots": "noindex, nofollow",
+      "environment": "staging",
       "gitops": {
         "repository": "myorg/gitops",
         "branch": "main",
@@ -52,8 +61,7 @@ Use the JSON schema for validation and autocompletion in your editor:
     },
     "production": {
       "when": "^refs/heads/main$",
-      "baseurl": "https://www.example.com",
-      "robots": "index, follow",
+      "environment": "production",
       "gitops": {
         "repository": "myorg/gitops",
         "branch": "main",

@@ -11,11 +11,11 @@ Each environment in `project.json` has a `when` pattern that matches against `GI
   "environments": {
     "staging": {
       "when": "^refs/heads/develop$",
-      "baseurl": "https://staging.example.com"
+      "environment": "staging"
     },
     "production": {
       "when": "^refs/heads/main$",
-      "baseurl": "https://www.example.com"
+      "environment": "production"
     }
   }
 }
@@ -25,7 +25,7 @@ When you push to `develop`, the pipeline:
 
 1. Matches `refs/heads/develop` against environment patterns
 2. Finds `staging` environment
-3. Builds with `baseurl: https://staging.example.com`
+3. Builds with `hugo --environment staging`
 4. Tags image as `staging-<sha>`
 5. Updates `values-staging.yaml` in GitOps repo
 
@@ -34,12 +34,49 @@ When you push to `develop`, the pipeline:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `when` | string | Yes | Regex pattern to match `GITHUB_REF` |
-| `baseurl` | string | Yes | Hugo `--baseURL` value |
-| `robots` | string | No | robots.txt directive |
-| `approval_required` | boolean | No | Require manual approval |
+| `environment` | string | No | Hugo `--environment` value (defaults to environment key) |
+| `baseurl` | string | No | Hugo `--baseURL` override (if not set, uses Hugo config) |
 | `gitops.repository` | string | Yes | GitOps repo (owner/repo) |
 | `gitops.branch` | string | No | Target branch (default: `main`) |
 | `gitops.file` | string | Yes | Values file to update |
+
+## Hugo Configuration Directory
+
+Hugo natively supports [Configuration Directory](https://gohugo.io/getting-started/configuration/#configuration-directory) for environment-specific settings:
+
+```
+config/
+  _default/           # Base config (always loaded)
+    hugo.toml
+    params.toml
+  development/        # For dev/feature branches
+    params.toml
+  staging/
+    params.toml
+  production/
+    params.toml
+```
+
+Example `config/staging/params.toml`:
+```toml
+showEnvironmentBanner = true
+environmentBannerText = "Staging Environment"
+environmentBannerColor = "#ff9800"
+```
+
+Example `config/production/params.toml`:
+```toml
+showEnvironmentBanner = false
+```
+
+In your Hugo template:
+```html
+{{ if site.Params.showEnvironmentBanner }}
+<div class="env-banner" style="background: {{ site.Params.environmentBannerColor }}">
+  {{ site.Params.environmentBannerText }}
+</div>
+{{ end }}
+```
 
 ## Common Patterns
 
@@ -50,7 +87,7 @@ When you push to `develop`, the pipeline:
   "environments": {
     "staging": {
       "when": "^refs/heads/develop$",
-      "baseurl": "https://staging.example.com",
+      "environment": "staging",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-staging.yaml"
@@ -58,7 +95,7 @@ When you push to `develop`, the pipeline:
     },
     "production": {
       "when": "^refs/heads/main$",
-      "baseurl": "https://www.example.com",
+      "environment": "production",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-prod.yaml"
@@ -70,15 +107,15 @@ When you push to `develop`, the pipeline:
 
 ### Feature Branch Deployments
 
-Deploy every feature branch to a dev environment:
+Deploy every feature branch to a dev environment. All feature branches share the same Hugo `development` environment config:
 
 ```json
 {
   "environments": {
     "dev": {
       "when": "^refs/heads/feature/.*$",
+      "environment": "development",
       "baseurl": "https://dev.example.com",
-      "robots": "noindex, nofollow",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-dev.yaml"
@@ -88,22 +125,31 @@ Deploy every feature branch to a dev environment:
 }
 ```
 
-### Release Branch to QA
+### Dynamic URLs per Branch
+
+Use `${BRANCH_SLUG}` for unique URLs per feature branch:
 
 ```json
 {
   "environments": {
-    "qa": {
-      "when": "^refs/heads/release/.*$",
-      "baseurl": "https://qa.example.com",
+    "feature": {
+      "when": "^refs/heads/feature/.*$",
+      "environment": "development",
+      "baseurl": "https://${BRANCH_SLUG}.dev.example.com",
       "gitops": {
         "repository": "myorg/gitops",
-        "file": "apps/mysite/values-qa.yaml"
+        "file": "apps/mysite/values-${BRANCH_SLUG}.yaml"
       }
     }
   }
 }
 ```
+
+Example: `feature/login-page` becomes:
+- **URL:** `https://login-page.dev.example.com`
+- **Values file:** `values-login-page.yaml`
+
+This requires wildcard DNS (`*.dev.example.com`) and dynamic ArgoCD Applications.
 
 ### Full Pipeline
 
@@ -112,8 +158,8 @@ Deploy every feature branch to a dev environment:
   "environments": {
     "dev": {
       "when": "^refs/heads/feature/.*$",
+      "environment": "development",
       "baseurl": "https://dev.example.com",
-      "robots": "noindex, nofollow",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-dev.yaml"
@@ -121,8 +167,7 @@ Deploy every feature branch to a dev environment:
     },
     "staging": {
       "when": "^refs/heads/develop$",
-      "baseurl": "https://staging.example.com",
-      "robots": "noindex, nofollow",
+      "environment": "staging",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-staging.yaml"
@@ -130,8 +175,7 @@ Deploy every feature branch to a dev environment:
     },
     "qa": {
       "when": "^refs/heads/release/.*$",
-      "baseurl": "https://qa.example.com",
-      "robots": "noindex, nofollow",
+      "environment": "staging",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-qa.yaml"
@@ -139,9 +183,7 @@ Deploy every feature branch to a dev environment:
     },
     "production": {
       "when": "^refs/heads/main$",
-      "baseurl": "https://www.example.com",
-      "robots": "index, follow",
-      "approval_required": true,
+      "environment": "production",
       "gitops": {
         "repository": "myorg/gitops",
         "file": "apps/mysite/values-prod.yaml"
@@ -150,6 +192,8 @@ Deploy every feature branch to a dev environment:
   }
 }
 ```
+
+Note: `qa` uses the `staging` Hugo environment but deploys to a separate GitOps values file.
 
 ## Image Tags
 
@@ -160,6 +204,6 @@ Each environment gets its own image tags:
 | dev | `dev-abc123f`, `dev-latest` |
 | staging | `staging-def456a`, `staging-latest` |
 | qa | `qa-ghi789b`, `qa-latest` |
-| production | `prod-jkl012c`, `prod-latest` |
+| production | `production-jkl012c`, `production-latest` |
 
 The SHA-based tag ensures traceability back to the exact commit.

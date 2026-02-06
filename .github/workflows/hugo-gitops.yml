@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
+      hugo_environment: ${{ steps.detect.outputs.hugo_environment }}
       baseurl: ${{ steps.detect.outputs.baseurl }}
       should_deploy: ${{ steps.detect.outputs.should_deploy }}
       gitops_repository: ${{ steps.detect.outputs.gitops_repository }}
@@ -75,18 +76,29 @@ jobs:
             }
 
             if (matched) {
+              // Extract branch slug from ref (e.g., refs/heads/feature/login-page -> login-page)
+              const branchName = ref.replace(/^refs\/heads\//, '');
+              const branchSlug = branchName.split('/').pop().toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+              // Replace variables in baseurl and gitops file
+              const replaceVars = (str) => str
+                .replace(/\\\${BRANCH_SLUG}/g, branchSlug)
+                .replace(/\\\${BRANCH_NAME}/g, branchName);
+
               console.log(JSON.stringify({
                 environment: matched.name,
-                baseurl: matched.baseurl || '',
+                hugo_environment: matched.environment || matched.name,
+                baseurl: replaceVars(matched.baseurl || ''),
                 should_deploy: 'true',
                 gitops_repository: matched.gitops?.repository || '',
                 gitops_branch: matched.gitops?.branch || 'main',
-                gitops_file: matched.gitops?.file || '',
+                gitops_file: replaceVars(matched.gitops?.file || ''),
                 gitops_owner: (matched.gitops?.repository || '').split('/')[0] || ''
               }));
             } else {
               console.log(JSON.stringify({
                 environment: 'none',
+                hugo_environment: 'production',
                 baseurl: '',
                 should_deploy: 'false',
                 gitops_repository: '',
@@ -98,6 +110,7 @@ jobs:
           ")
 
           echo "environment=$(echo $RESULT | jq -r '.environment')" >> $GITHUB_OUTPUT
+          echo "hugo_environment=$(echo $RESULT | jq -r '.hugo_environment')" >> $GITHUB_OUTPUT
           echo "baseurl=$(echo $RESULT | jq -r '.baseurl')" >> $GITHUB_OUTPUT
           echo "should_deploy=$(echo $RESULT | jq -r '.should_deploy')" >> $GITHUB_OUTPUT
           echo "gitops_repository=$(echo $RESULT | jq -r '.gitops_repository')" >> $GITHUB_OUTPUT
@@ -111,7 +124,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** \`${{ steps.detect.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Base URL:** \`${{ steps.detect.outputs.baseurl }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Hugo Environment:** \`${{ steps.detect.outputs.hugo_environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Base URL:** \`${{ steps.detect.outputs.baseurl || '(from Hugo config)' }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Should Deploy:** \`${{ steps.detect.outputs.should_deploy }}\`" >> $GITHUB_STEP_SUMMARY
 
   lint-and-build:
@@ -202,13 +216,18 @@ jobs:
 
       - name: Generate Dockerfile
         run: |
+          BASEURL_FLAG=""
+          if [ -n "${{ needs.detect-environment.outputs.baseurl }}" ]; then
+            BASEURL_FLAG="--baseURL ${{ needs.detect-environment.outputs.baseurl }}"
+          fi
+
           cat > Dockerfile.generated <<EOF
           FROM ${{ env.BUILDER_IMAGE }} AS builder
           WORKDIR /build
           COPY . .
           RUN npm ci && copy-assets ${{ inputs.project_config }}
           WORKDIR /build/${{ steps.config.outputs.hugo_source }}
-          RUN hugo --minify --environment ${{ needs.detect-environment.outputs.environment }} --baseURL ${{ needs.detect-environment.outputs.baseurl }}
+          RUN hugo --minify --environment ${{ needs.detect-environment.outputs.hugo_environment }} ${BASEURL_FLAG}
 
           FROM ${{ env.RUNTIME_IMAGE }}
           COPY --from=builder /build/${{ steps.config.outputs.hugo_source }}/public /usr/share/nginx/html

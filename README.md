@@ -57,17 +57,19 @@ flowchart LR
   "environments": {
     "staging": {
       "when": "^refs/heads/develop$",
-      "baseurl": "https://staging.example.com",
+      "environment": "staging",
       "gitops": { "repository": "myorg/gitops", "file": "apps/mysite/values-staging.yaml" }
     },
     "production": {
       "when": "^refs/heads/main$",
-      "baseurl": "https://www.example.com",
+      "environment": "production",
       "gitops": { "repository": "myorg/gitops", "file": "apps/mysite/values-prod.yaml" }
     }
   }
 }
 ```
+
+The `environment` field maps to Hugo's native [Configuration Directory](https://gohugo.io/getting-started/configuration/#configuration-directory) - use it to show environment banners, change colors, or adjust settings per environment.
 
 **2. Add workflow `.github/workflows/ci-cd.yml`:**
 
