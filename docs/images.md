@@ -56,6 +56,26 @@ ghcr.io/slauger/hugo-gitops-pipeline/cleanup:v1.0.0
 
 The `latest` tag always points to the most recent release.
 
+## Release Assets
+
+Each release includes an `images.json` asset with pinned image references including digests:
+
+```json
+{
+  "version": "1.0.0",
+  "builder": {
+    "image": "ghcr.io/slauger/hugo-gitops-pipeline/builder",
+    "tag": "v1.0.0",
+    "digest": "sha256:abc123...",
+    "full": "ghcr.io/slauger/hugo-gitops-pipeline/builder:v1.0.0@sha256:abc123..."
+  },
+  "runtime": { ... },
+  "cleanup": { ... }
+}
+```
+
+The pipeline automatically resolves image references from the latest release, ensuring reproducible builds with pinned digests.
+
 ## Updates
 
 Images are automatically updated via Renovate when:
@@ -64,4 +84,4 @@ Images are automatically updated via Renovate when:
 - New nginx version is released
 - Dependencies are updated
 
-The pipeline updates the image references and creates a new semantic release.
+A new semantic release is created, which triggers the image build and uploads the `images.json` asset.

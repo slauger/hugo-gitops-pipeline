@@ -28,9 +28,10 @@ on:
         required: true
 
 env:
-  # Updated automatically by build-images.yml after each release
+  # Fallback images - overridden at runtime from release asset
   BUILDER_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/builder:latest
   RUNTIME_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/runtime:latest
+  PIPELINE_REPO: slauger/hugo-gitops-pipeline
 
 jobs:
   detect-environment:
@@ -187,6 +188,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Resolve pipeline images from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Download images.json from latest release
+          ASSET_URL=$(gh release view --repo ${{ env.PIPELINE_REPO }} --json assets -q '.assets[] | select(.name=="images.json") | .url')
+
+          if [ -n "$ASSET_URL" ]; then
+            IMAGES=$(curl -sL -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL")
+            echo "Resolved images from release:"
+            echo "$IMAGES" | jq .
+
+            echo "BUILDER_IMAGE=$(echo $IMAGES | jq -r '.builder.full')" >> $GITHUB_ENV
+            echo "RUNTIME_IMAGE=$(echo $IMAGES | jq -r '.runtime.full')" >> $GITHUB_ENV
+          else
+            echo "::warning::No images.json found in release, using fallback (latest)"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

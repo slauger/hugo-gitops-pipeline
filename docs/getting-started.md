@@ -78,6 +78,8 @@ Add these secrets to your GitHub repository:
 | `GITOPS_APP_ID` | GitHub App ID for GitOps repo access |
 | `GITOPS_APP_PRIVATE_KEY` | GitHub App private key |
 
+See [GitHub App Setup](github-app.md) for a step-by-step guide on creating the GitHub App.
+
 ### Passing secrets
 
 GitHub Actions provides two ways to pass secrets to reusable workflows:

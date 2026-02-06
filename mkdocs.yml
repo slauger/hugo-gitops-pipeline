@@ -51,6 +51,7 @@ nav:
   - Home: index.md
   - Getting Started:
     - Quick Start: getting-started.md
+    - GitHub App Setup: github-app.md
     - Configuration: configuration.md
     - Environments: environments.md
   - Reference:
