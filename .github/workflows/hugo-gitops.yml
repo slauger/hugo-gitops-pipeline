@@ -1,0 +1,302 @@
+name: Hugo GitOps Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      registry:
+        description: 'Container registry URL'
+        required: true
+        type: string
+      image_name:
+        description: 'Image name (without registry)'
+        required: true
+        type: string
+      project_config:
+        description: 'Path to project.json config file'
+        required: false
+        type: string
+        default: 'project.json'
+
+    secrets:
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_PASSWORD:
+        required: true
+      GITOPS_APP_ID:
+        required: true
+      GITOPS_APP_PRIVATE_KEY:
+        required: true
+
+env:
+  # Updated automatically by build-images.yml
+  BUILDER_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/builder:0.145.0
+  RUNTIME_IMAGE: ghcr.io/slauger/hugo-gitops-pipeline/runtime:1.27
+
+jobs:
+  detect-environment:
+    name: Detect Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.detect.outputs.environment }}
+      baseurl: ${{ steps.detect.outputs.baseurl }}
+      should_deploy: ${{ steps.detect.outputs.should_deploy }}
+      gitops_repository: ${{ steps.detect.outputs.gitops_repository }}
+      gitops_branch: ${{ steps.detect.outputs.gitops_branch }}
+      gitops_file: ${{ steps.detect.outputs.gitops_file }}
+      gitops_owner: ${{ steps.detect.outputs.gitops_owner }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect environment from project.json
+        id: detect
+        run: |
+          CONFIG="${{ inputs.project_config }}"
+          REF="${{ github.ref }}"
+
+          if [ ! -f "$CONFIG" ]; then
+            echo "::error::Config file $CONFIG not found"
+            exit 1
+          fi
+
+          # Find matching environment
+          RESULT=$(node -e "
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('$CONFIG'));
+            const ref = '$REF';
+
+            let matched = null;
+            for (const [name, env] of Object.entries(config.environments || {})) {
+              if (env.when && new RegExp(env.when).test(ref)) {
+                matched = { name, ...env };
+                break;
+              }
+            }
+
+            if (matched) {
+              console.log(JSON.stringify({
+                environment: matched.name,
+                baseurl: matched.baseurl || '',
+                should_deploy: 'true',
+                gitops_repository: matched.gitops?.repository || '',
+                gitops_branch: matched.gitops?.branch || 'main',
+                gitops_file: matched.gitops?.file || '',
+                gitops_owner: (matched.gitops?.repository || '').split('/')[0] || ''
+              }));
+            } else {
+              console.log(JSON.stringify({
+                environment: 'none',
+                baseurl: '',
+                should_deploy: 'false',
+                gitops_repository: '',
+                gitops_branch: '',
+                gitops_file: '',
+                gitops_owner: ''
+              }));
+            }
+          ")
+
+          echo "environment=$(echo $RESULT | jq -r '.environment')" >> $GITHUB_OUTPUT
+          echo "baseurl=$(echo $RESULT | jq -r '.baseurl')" >> $GITHUB_OUTPUT
+          echo "should_deploy=$(echo $RESULT | jq -r '.should_deploy')" >> $GITHUB_OUTPUT
+          echo "gitops_repository=$(echo $RESULT | jq -r '.gitops_repository')" >> $GITHUB_OUTPUT
+          echo "gitops_branch=$(echo $RESULT | jq -r '.gitops_branch')" >> $GITHUB_OUTPUT
+          echo "gitops_file=$(echo $RESULT | jq -r '.gitops_file')" >> $GITHUB_OUTPUT
+          echo "gitops_owner=$(echo $RESULT | jq -r '.gitops_owner')" >> $GITHUB_OUTPUT
+
+      - name: Environment summary
+        run: |
+          echo "## Environment Detection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${{ steps.detect.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Base URL:** \`${{ steps.detect.outputs.baseurl }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Should Deploy:** \`${{ steps.detect.outputs.should_deploy }}\`" >> $GITHUB_STEP_SUMMARY
+
+  lint-and-build:
+    name: Lint and Build
+    runs-on: ubuntu-latest
+    needs: detect-environment
+    container:
+      image: ghcr.io/slauger/hugo-gitops-pipeline/builder:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Copy assets
+        run: copy-assets ${{ inputs.project_config }}
+
+      - name: Build Hugo site
+        run: |
+          CONFIG="${{ inputs.project_config }}"
+          HUGO_SOURCE=$(node -e "const c = JSON.parse(require('fs').readFileSync('$CONFIG')); console.log(c.hugo?.source || 'hugo')")
+
+          cd "$HUGO_SOURCE"
+          hugo --minify
+
+      - name: Run linters
+        run: |
+          CONFIG="${{ inputs.project_config }}"
+          HUGO_SOURCE=$(node -e "const c = JSON.parse(require('fs').readFileSync('$CONFIG')); console.log(c.hugo?.source || 'hugo')")
+
+          # HTMLHint
+          if node -e "const c = JSON.parse(require('fs').readFileSync('$CONFIG')); process.exit(c.lint?.htmlhint ? 0 : 1)" 2>/dev/null; then
+            echo "Running HTMLHint..."
+            npx htmlhint "${HUGO_SOURCE}/public/**/*.html" || true
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hugo-public
+          path: hugo/public/
+          retention-days: 1
+
+  build-and-push:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    needs: [detect-environment, lint-and-build]
+    if: needs.detect-environment.outputs.should_deploy == 'true'
+
+    permissions:
+      contents: read
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.registry }}/${{ inputs.image_name }}
+          tags: |
+            type=sha,prefix=${{ needs.detect-environment.outputs.environment }}-,format=short
+            type=raw,value=${{ needs.detect-environment.outputs.environment }}-latest
+
+      - name: Read Hugo source from config
+        id: config
+        run: |
+          CONFIG="${{ inputs.project_config }}"
+          HUGO_SOURCE=$(node -e "const c = JSON.parse(require('fs').readFileSync('$CONFIG')); console.log(c.hugo?.source || 'hugo')")
+          echo "hugo_source=${HUGO_SOURCE}" >> $GITHUB_OUTPUT
+
+      - name: Generate Dockerfile
+        run: |
+          cat > Dockerfile.generated <<EOF
+          FROM ${{ env.BUILDER_IMAGE }} AS builder
+          WORKDIR /build
+          COPY . .
+          RUN npm ci && copy-assets ${{ inputs.project_config }}
+          WORKDIR /build/${{ steps.config.outputs.hugo_source }}
+          RUN hugo --minify --environment ${{ needs.detect-environment.outputs.environment }} --baseURL ${{ needs.detect-environment.outputs.baseurl }}
+
+          FROM ${{ env.RUNTIME_IMAGE }}
+          COPY --from=builder /build/${{ steps.config.outputs.hugo_source }}/public /usr/share/nginx/html
+          COPY nginx/ /etc/nginx/conf.d/ 2>/dev/null || true
+          EOF
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.generated
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+
+      - name: Build summary
+        run: |
+          echo "## Docker Image Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${{ needs.detect-environment.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ inputs.registry }}/${{ inputs.image_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: Deploy via GitOps
+    runs-on: ubuntu-latest
+    needs: [detect-environment, build-and-push]
+    if: needs.detect-environment.outputs.should_deploy == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GITOPS_APP_ID }}
+          private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+          owner: ${{ needs.detect-environment.outputs.gitops_owner }}
+          repositories: ${{ needs.detect-environment.outputs.gitops_repository }}
+
+      - name: Generate gitops-image-replacer config
+        run: |
+          CONFIG="${{ inputs.project_config }}"
+
+          node -e "
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('$CONFIG'));
+
+            const gitopsConfig = {
+              'gitops-image-replacer': Object.entries(config.environments || {}).map(([name, env]) => ({
+                repository: env.gitops?.repository || '',
+                branch: env.gitops?.branch || 'main',
+                file: env.gitops?.file || '',
+                when: env.when || ''
+              })).filter(e => e.repository && e.file)
+            };
+
+            fs.writeFileSync('gitops-image-replacer.json', JSON.stringify(gitopsConfig, null, 2));
+          "
+
+          cat gitops-image-replacer.json
+
+      - name: Install gitops-image-replacer
+        run: pip install gitops-image-replacer==0.3.0
+
+      - name: Update image in GitOps repository
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GIT_REF: ${{ github.ref }}
+        run: |
+          IMAGE_TAG="${{ needs.build-and-push.outputs.image-tag }}"
+          IMAGE_DIGEST="${{ needs.build-and-push.outputs.image-digest }}"
+          IMAGE_FULL="${{ inputs.registry }}/${{ inputs.image_name }}:${IMAGE_TAG}@${IMAGE_DIGEST}"
+
+          echo "Updating image to: ${IMAGE_FULL}"
+          gitops-image-replacer --ci --apply "${IMAGE_FULL}"
+
+      - name: Deployment summary
+        run: |
+          echo "## GitOps Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${{ needs.detect-environment.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**GitOps Repo:** \`${{ needs.detect-environment.outputs.gitops_repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**GitOps File:** \`${{ needs.detect-environment.outputs.gitops_file }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag:** \`${{ needs.build-and-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Digest:** \`${{ needs.build-and-push.outputs.image-digest }}\`" >> $GITHUB_STEP_SUMMARY

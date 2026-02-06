@@ -1,0 +1,52 @@
+#!/bin/sh
+set -e
+
+CONFIG_FILE="${1:-project.json}"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "No $CONFIG_FILE found, skipping copy-assets"
+  exit 0
+fi
+
+echo "Copying assets from $CONFIG_FILE..."
+
+node -e "
+const fs = require('fs');
+const path = require('path');
+
+const config = JSON.parse(fs.readFileSync('$CONFIG_FILE'));
+
+if (!config.copy || config.copy.length === 0) {
+  console.log('No copy tasks defined, skipping');
+  process.exit(0);
+}
+
+config.copy.forEach(task => {
+  const from = task.from;
+  const to = task.to;
+
+  // Ensure destination directory exists
+  fs.mkdirSync(to, { recursive: true });
+
+  // Check if source is a directory or file
+  if (!fs.existsSync(from)) {
+    console.warn('  WARN: ' + from + ' does not exist, skipping');
+    return;
+  }
+
+  const stat = fs.statSync(from);
+
+  if (stat.isDirectory()) {
+    // Copy directory recursively
+    fs.cpSync(from, to, { recursive: true });
+    console.log('  DIR:  ' + from + ' -> ' + to);
+  } else {
+    // Copy single file
+    const destFile = path.join(to, path.basename(from));
+    fs.copyFileSync(from, destFile);
+    console.log('  FILE: ' + from + ' -> ' + destFile);
+  }
+});
+
+console.log('Done copying ' + config.copy.length + ' asset(s)');
+"

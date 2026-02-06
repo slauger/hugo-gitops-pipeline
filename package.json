@@ -1,0 +1,21 @@
+{
+  "name": "hugo-gitops-pipeline",
+  "version": "0.0.0-semantically-released",
+  "description": "Reusable Hugo CI/CD Pipeline with GitOps deployment",
+  "private": true,
+  "scripts": {
+    "semantic-release": "semantic-release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/slauger/hugo-gitops-pipeline.git"
+  },
+  "author": "Simon Lauger <simon@lauger.de>",
+  "license": "MIT",
+  "devDependencies": {
+    "semantic-release": "^24.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.0",
+    "@semantic-release/release-notes-generator": "^14.0.0",
+    "@semantic-release/github": "^10.0.0"
+  }
+}

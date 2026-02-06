@@ -1,0 +1,57 @@
+{
+  "$schema": "https://raw.githubusercontent.com/slauger/hugo-gitops-pipeline/main/schemas/project.schema.json",
+
+  "hugo": {
+    "source": "hugo",
+    "config": "hugo.toml"
+  },
+
+  "copy": [
+    {
+      "from": "node_modules/photoswipe/dist/photoswipe.esm.js",
+      "to": "hugo/static/libs/photoswipe/"
+    },
+    {
+      "from": "node_modules/photoswipe/dist/photoswipe-lightbox.esm.js",
+      "to": "hugo/static/libs/photoswipe/"
+    },
+    {
+      "from": "node_modules/photoswipe/dist/photoswipe.css",
+      "to": "hugo/static/libs/photoswipe/"
+    }
+  ],
+
+  "lint": {
+    "htmlhint": true,
+    "links": false,
+    "a11y": false
+  },
+
+  "nginx": {
+    "config_dir": "nginx/"
+  },
+
+  "environments": {
+    "staging": {
+      "when": "^refs/heads/develop$",
+      "baseurl": "https://mysite-staging.example.com",
+      "robots": "noindex, nofollow",
+      "gitops": {
+        "repository": "myorg/gitops",
+        "branch": "main",
+        "file": "apps/mysite/values-staging.yaml"
+      }
+    },
+    "production": {
+      "when": "^refs/heads/main$",
+      "baseurl": "https://www.example.com",
+      "robots": "index, follow",
+      "approval_required": true,
+      "gitops": {
+        "repository": "myorg/gitops",
+        "branch": "main",
+        "file": "apps/mysite/values-prod.yaml"
+      }
+    }
+  }
+}

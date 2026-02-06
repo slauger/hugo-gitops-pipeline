@@ -1,0 +1,18 @@
+# Example workflow for your Hugo project
+# Save this as .github/workflows/ci-cd.yml
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  pipeline:
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    with:
+      registry: registry.example.com
+      image_name: my-hugo-site
+    secrets: inherit

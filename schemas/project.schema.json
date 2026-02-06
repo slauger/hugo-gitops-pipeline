@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/slauger/hugo-gitops-pipeline/main/schemas/project.schema.json",
+  "title": "Hugo GitOps Project Configuration",
+  "type": "object",
+  "properties": {
+    "hugo": {
+      "type": "object",
+      "description": "Hugo configuration",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Hugo source directory",
+          "default": "hugo"
+        },
+        "config": {
+          "type": "string",
+          "description": "Hugo config file name",
+          "default": "hugo.toml"
+        }
+      }
+    },
+    "copy": {
+      "type": "array",
+      "description": "Assets to copy before build",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source path (file or directory)"
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination directory"
+          }
+        },
+        "required": ["from", "to"]
+      }
+    },
+    "lint": {
+      "type": "object",
+      "description": "Linting configuration",
+      "properties": {
+        "htmlhint": {
+          "type": "boolean",
+          "description": "Enable HTMLHint validation",
+          "default": true
+        },
+        "links": {
+          "type": "boolean",
+          "description": "Enable broken link checking",
+          "default": false
+        },
+        "a11y": {
+          "type": "boolean",
+          "description": "Enable accessibility checks",
+          "default": false
+        }
+      }
+    },
+    "nginx": {
+      "type": "object",
+      "description": "Nginx configuration",
+      "properties": {
+        "config_dir": {
+          "type": "string",
+          "description": "Directory containing nginx config snippets",
+          "default": "nginx/"
+        }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "description": "Environment configurations",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "description": "Regex pattern to match against GITHUB_REF"
+          },
+          "baseurl": {
+            "type": "string",
+            "description": "Hugo baseURL for this environment"
+          },
+          "robots": {
+            "type": "string",
+            "description": "Robots meta tag value",
+            "default": "index, follow"
+          },
+          "approval_required": {
+            "type": "boolean",
+            "description": "Require manual approval for deployment",
+            "default": false
+          },
+          "gitops": {
+            "type": "object",
+            "description": "GitOps deployment configuration",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "description": "GitOps repository (owner/repo)"
+              },
+              "branch": {
+                "type": "string",
+                "description": "Target branch",
+                "default": "main"
+              },
+              "file": {
+                "type": "string",
+                "description": "Values file to update"
+              }
+            },
+            "required": ["repository", "file"]
+          }
+        },
+        "required": ["when", "baseurl"]
+      }
+    }
+  }
+}
