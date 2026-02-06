@@ -1,0 +1,68 @@
+# Example Kubernetes CronJob for registry cleanup
+# Deploy via ArgoCD or kubectl
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: registry-cleanup-credentials
+  namespace: registry
+type: Opaque
+stringData:
+  REGISTRY_USERNAME: "your-username"
+  REGISTRY_PASSWORD: "your-password"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-cleanup-config
+  namespace: registry
+data:
+  config.yaml: |
+    registry: registry.example.com
+
+    retention:
+      default:
+        keep_latest: 10
+        keep_days: 30
+
+      rules:
+        - image: my-hugo-site
+          keep_latest: 5
+          keep_tags:
+            - "prod-latest"
+            - "staging-latest"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: registry-cleanup
+  namespace: registry
+spec:
+  schedule: "0 3 * * 0"  # Every Sunday at 3:00 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: ghcr.io/slauger/hugo-gitops-pipeline/cleanup:latest
+              env:
+                - name: DRY_RUN
+                  value: "false"
+                - name: CONFIG_FILE
+                  value: /config/config.yaml
+              envFrom:
+                - secretRef:
+                    name: registry-cleanup-credentials
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+          volumes:
+            - name: config
+              configMap:
+                name: registry-cleanup-config

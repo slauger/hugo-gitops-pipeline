@@ -163,6 +163,52 @@ These are automatically included in the runtime image.
 |-------|-------------|
 | `ghcr.io/slauger/hugo-gitops-pipeline/builder` | Node.js + Hugo extended |
 | `ghcr.io/slauger/hugo-gitops-pipeline/runtime` | Hardened nginx |
+| `ghcr.io/slauger/hugo-gitops-pipeline/cleanup` | Registry cleanup tool |
+
+## Registry Cleanup
+
+The cleanup image helps manage old container images in your registry. It uses [regctl](https://github.com/regclient/regclient) under the hood.
+
+### Configuration
+
+Create a `config.yaml` with retention rules:
+
+```yaml
+registry: registry.example.com
+
+retention:
+  default:
+    keep_latest: 10
+    keep_days: 30
+
+  rules:
+    - image: my-hugo-site
+      keep_latest: 5
+      keep_tags:
+        - "prod-latest"
+        - "staging-latest"
+```
+
+### Run manually
+
+```bash
+# Dry run (default)
+docker run -v $(pwd)/config.yaml:/config/config.yaml \
+  -e REGISTRY_USERNAME=user \
+  -e REGISTRY_PASSWORD=pass \
+  ghcr.io/slauger/hugo-gitops-pipeline/cleanup:latest
+
+# Actually delete
+docker run -v $(pwd)/config.yaml:/config/config.yaml \
+  -e REGISTRY_USERNAME=user \
+  -e REGISTRY_PASSWORD=pass \
+  -e DRY_RUN=false \
+  ghcr.io/slauger/hugo-gitops-pipeline/cleanup:latest
+```
+
+### Kubernetes CronJob
+
+See [examples/cleanup-cronjob.yaml](examples/cleanup-cronjob.yaml) for a complete example that can be deployed via ArgoCD.
 
 ## License
 

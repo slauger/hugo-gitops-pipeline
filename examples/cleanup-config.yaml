@@ -1,0 +1,23 @@
+# Example cleanup configuration
+# Mount this as /config/config.yaml in the cleanup container
+
+registry: registry.example.com
+
+retention:
+  # Default settings for all images
+  default:
+    keep_latest: 10
+    keep_days: 30
+
+  # Per-image rules (override defaults)
+  rules:
+    - image: my-hugo-site
+      keep_latest: 5
+      keep_tags:
+        - "prod-latest"
+        - "staging-latest"
+
+    - image: another-site
+      keep_latest: 3
+      keep_tags:
+        - "prod-latest"

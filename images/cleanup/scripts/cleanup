@@ -1,0 +1,109 @@
+#!/bin/bash
+set -e
+
+CONFIG="${CONFIG_FILE:-/config/config.yaml}"
+DRY_RUN="${DRY_RUN:-true}"
+
+if [ ! -f "$CONFIG" ]; then
+  echo "ERROR: Config file not found: $CONFIG"
+  exit 1
+fi
+
+REGISTRY=$(yq '.registry' "$CONFIG")
+
+echo "============================================"
+echo "Registry Cleanup"
+echo "============================================"
+echo "Registry:  $REGISTRY"
+echo "Config:    $CONFIG"
+echo "Dry Run:   $DRY_RUN"
+echo "============================================"
+
+# Login to registry
+if [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+  echo "Logging in to registry..."
+  regctl registry login "$REGISTRY" \
+    --user "$REGISTRY_USERNAME" \
+    --pass "$REGISTRY_PASSWORD"
+else
+  echo "No credentials provided, using anonymous access"
+fi
+
+# Get default retention settings
+DEFAULT_KEEP_LATEST=$(yq '.retention.default.keep_latest // 10' "$CONFIG")
+DEFAULT_KEEP_DAYS=$(yq '.retention.default.keep_days // 30' "$CONFIG")
+
+echo ""
+echo "Default retention: keep_latest=$DEFAULT_KEEP_LATEST, keep_days=$DEFAULT_KEEP_DAYS"
+echo ""
+
+# Process each image rule
+RULES_COUNT=$(yq '.retention.rules | length' "$CONFIG")
+
+for i in $(seq 0 $((RULES_COUNT - 1))); do
+  IMAGE=$(yq ".retention.rules[$i].image" "$CONFIG")
+  KEEP_LATEST=$(yq ".retention.rules[$i].keep_latest // $DEFAULT_KEEP_LATEST" "$CONFIG")
+  KEEP_TAGS=$(yq ".retention.rules[$i].keep_tags // []" "$CONFIG")
+
+  FULL_IMAGE="${REGISTRY}/${IMAGE}"
+
+  echo "--------------------------------------------"
+  echo "Processing: $FULL_IMAGE"
+  echo "  Keep latest: $KEEP_LATEST"
+  echo "  Keep tags:   $KEEP_TAGS"
+  echo ""
+
+  # Get all tags
+  TAGS=$(regctl tag ls "$FULL_IMAGE" 2>/dev/null || echo "")
+
+  if [ -z "$TAGS" ]; then
+    echo "  No tags found, skipping"
+    continue
+  fi
+
+  TAG_COUNT=$(echo "$TAGS" | wc -l | tr -d ' ')
+  echo "  Found $TAG_COUNT tags"
+
+  # Build regex for protected tags
+  PROTECTED_REGEX=$(echo "$KEEP_TAGS" | yq -r '.[] // empty' | paste -sd'|' -)
+  if [ -z "$PROTECTED_REGEX" ]; then
+    PROTECTED_REGEX="^$"  # Match nothing if no protected tags
+  fi
+
+  # Filter out protected tags and sort by creation time (newest first)
+  DELETABLE_TAGS=$(echo "$TAGS" | grep -vE "$PROTECTED_REGEX" || true)
+  DELETABLE_COUNT=$(echo "$DELETABLE_TAGS" | grep -c . || echo 0)
+
+  if [ "$DELETABLE_COUNT" -le "$KEEP_LATEST" ]; then
+    echo "  Only $DELETABLE_COUNT deletable tags, keeping all (threshold: $KEEP_LATEST)"
+    continue
+  fi
+
+  # Tags to delete (skip the newest KEEP_LATEST)
+  DELETE_TAGS=$(echo "$DELETABLE_TAGS" | tail -n +$((KEEP_LATEST + 1)))
+  DELETE_COUNT=$(echo "$DELETE_TAGS" | grep -c . || echo 0)
+
+  echo "  Will delete $DELETE_COUNT old tags"
+
+  for TAG in $DELETE_TAGS; do
+    if [ "$DRY_RUN" = "true" ]; then
+      echo "  [DRY-RUN] Would delete: $TAG"
+    else
+      echo "  Deleting: $TAG"
+      if regctl tag rm "${FULL_IMAGE}:${TAG}" 2>/dev/null; then
+        echo "    OK"
+      else
+        echo "    FAILED"
+      fi
+    fi
+  done
+done
+
+echo ""
+echo "============================================"
+if [ "$DRY_RUN" = "true" ]; then
+  echo "Dry run complete. Set DRY_RUN=false to delete."
+else
+  echo "Cleanup complete."
+fi
+echo "============================================"
