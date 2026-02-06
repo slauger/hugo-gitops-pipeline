@@ -2,6 +2,8 @@
 
 A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment.
 
+> **New to this project?** Check out the [Reference Architecture](docs/architecture.md) for a complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud.
+
 ## Features
 
 - **Zero-config builds**: Just add a `project.json` and go
@@ -209,6 +211,26 @@ docker run -v $(pwd)/config.yaml:/config/config.yaml \
 ### Kubernetes CronJob
 
 See [examples/cleanup-cronjob.yaml](examples/cleanup-cronjob.yaml) for a complete example that can be deployed via ArgoCD.
+
+## Reference Architecture
+
+For a complete, production-ready setup including:
+
+- Flatcar Linux + K3S on Hetzner Cloud
+- ArgoCD with App-of-Apps pattern
+- Self-hosted Docker Registry with S3 backend
+- GDPR-compliant hosting (100% Germany)
+- Cost estimations
+
+See [docs/architecture.md](docs/architecture.md)
+
+## Related Projects
+
+| Project | Description |
+|---------|-------------|
+| [slauger/flatcar-hcloud](https://github.com/slauger/flatcar-hcloud) | Flatcar Linux + K3S on Hetzner |
+| [slauger/gitops-image-replacer](https://github.com/slauger/gitops-image-replacer) | Update image refs in GitOps repos |
+| [slauger/helm-charts](https://github.com/slauger/helm-charts) | Helm charts (hugo-nginx, hcloud-registry) |
 
 ## License
 
