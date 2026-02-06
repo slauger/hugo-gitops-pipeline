@@ -1,6 +1,22 @@
 # Hugo GitOps Pipeline
 
-A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment.
+A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment to Kubernetes. Designed for **GDPR-compliant hosting** entirely within the EU - no Cloudflare, no Google Fonts, no external CDNs.
+
+> **New to this project?** Check out the [Getting Started Guide](https://slauger.github.io/hugo-gitops-pipeline/getting-started/) and the [Reference Architecture](https://slauger.github.io/hugo-gitops-pipeline/architecture/).
+
+## Features
+
+- 🇪🇺 **GDPR-Compliant** - Self-hosted on Hetzner Cloud (Germany), no data leaves the EU
+- 🔄 **GitOps Ready** - Automated deployment via ArgoCD with [gitops-image-replacer](https://github.com/slauger/gitops-image-replacer)
+- 🌍 **Multi-Environment** - Support for dev, staging, QA, production with branch-based deployment
+- 📦 **Reusable Workflow** - Single `workflow_call` for all your Hugo sites
+- 🐳 **Container Images** - Builder (Node.js + Hugo), Runtime (hardened nginx), Cleanup (registry GC)
+- 🔒 **Security** - Pinned image digests, non-root containers, security headers
+- 🏷️ **Semantic Versioning** - Automated releases with [semantic-release](https://github.com/semantic-release/semantic-release)
+
+### Branch to Environment Mapping
+
+Each branch automatically deploys to its corresponding environment:
 
 ```mermaid
 flowchart LR
