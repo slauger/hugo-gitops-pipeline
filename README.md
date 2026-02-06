@@ -80,6 +80,44 @@ Add these secrets to your repository:
 | `GITOPS_APP_ID` | GitHub App ID for GitOps repo access |
 | `GITOPS_APP_PRIVATE_KEY` | GitHub App private key |
 
+### Passing secrets to the workflow
+
+GitHub Actions provides two ways to pass secrets to reusable workflows:
+
+**Option A: `secrets: inherit` (simple)**
+
+Passes all secrets from the calling repository to the reusable workflow automatically.
+
+```yaml
+jobs:
+  pipeline:
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    with:
+      registry: registry.example.com
+      image_name: my-hugo-site
+    secrets: inherit
+```
+
+**Option B: Explicit secrets (more control)**
+
+Explicitly pass only the required secrets. More verbose but clearer about what is shared.
+
+```yaml
+jobs:
+  pipeline:
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    with:
+      registry: registry.example.com
+      image_name: my-hugo-site
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      GITOPS_APP_ID: ${{ secrets.GITOPS_APP_ID }}
+      GITOPS_APP_PRIVATE_KEY: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+```
+
+See [GitHub Docs: Using secrets in a reusable workflow](https://docs.github.com/en/actions/sharing-automations/reusing-workflows#using-inputs-and-secrets-in-a-reusable-workflow) for more details.
+
 ## Configuration
 
 ### project.json
