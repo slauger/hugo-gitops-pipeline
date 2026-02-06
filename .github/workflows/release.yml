@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+  workflows: write
+
 jobs:
   validate-builds:
     name: Validate Docker Builds
@@ -31,10 +38,6 @@ jobs:
     name: Semantic Release
     runs-on: ubuntu-latest
     needs: validate-builds
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
 
     outputs:
       new_release_published: ${{ steps.semantic.outputs.new_release_published }}
@@ -78,7 +81,4 @@ jobs:
     uses: ./.github/workflows/build-images.yml
     with:
       version: ${{ needs.release.outputs.new_release_version }}
-    permissions:
-      contents: write
-      packages: write
-      workflows: write
+    secrets: inherit
