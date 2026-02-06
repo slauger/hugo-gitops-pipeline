@@ -6,8 +6,6 @@ A complete, GDPR-compliant Hugo hosting stack on Hetzner Cloud - fully self-host
 
 ![Architecture Overview](./images/architecture-overview.svg)
 
-<!-- TODO: Create with draw.io and export as SVG -->
-
 ## Components
 
 ### Infrastructure
