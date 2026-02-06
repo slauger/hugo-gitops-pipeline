@@ -1,0 +1,19 @@
+{
+  "steps": ["build", "lint", "test"],
+  "build": {
+    "steps": [
+      "npm ci",
+      "copy-assets ${CONFIG:-project.json}",
+      "cd ${HUGO_SOURCE:-.} && hugo --minify --environment ${ENVIRONMENT:-production} ${BASEURL:+--baseURL $BASEURL}"
+    ]
+  },
+  "lint": {
+    "steps": [
+      "htmlhint ${HUGO_SOURCE:-.}/${OUTPUT:-public}/**/*.html || true"
+    ]
+  },
+  "test": {
+    "steps": []
+  },
+  "output": "public"
+}
