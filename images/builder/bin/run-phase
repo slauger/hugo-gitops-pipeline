@@ -41,9 +41,7 @@ fi
 
 echo "=== Running phase: $PHASE ==="
 echo "$STEPS" | while IFS= read -r cmd; do
-  # Expand environment variables in command
-  expanded=$(eval echo "$cmd")
-  echo "+ $expanded"
-  eval "$expanded"
+  echo "+ $cmd"
+  eval "$cmd"
 done
 echo "=== Phase $PHASE complete ==="
