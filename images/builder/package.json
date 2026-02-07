@@ -1,0 +1,8 @@
+{
+  "name": "hugo-gitops-builder",
+  "version": "1.0.0",
+  "description": "Linting and build tools for Hugo GitOps Pipeline",
+  "dependencies": {
+    "htmlhint": "^1.8.0"
+  }
+}
