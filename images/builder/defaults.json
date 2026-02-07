@@ -9,7 +9,7 @@
   },
   "lint": {
     "steps": [
-      "htmlhint ${HUGO_SOURCE:-.}/${OUTPUT:-public}/**/*.html || true"
+      "htmlhint --config $([ -f .htmlhintrc ] && echo .htmlhintrc || echo /builder/.htmlhintrc) ${HUGO_SOURCE:-.}/${OUTPUT:-public}/**/*.html || true"
     ]
   },
   "test": {
