@@ -57,7 +57,17 @@ jobs:
         id: detect
         run: |
           CONFIG="${{ inputs.project_config }}"
-          REF="${{ github.ref }}"
+          EVENT_NAME="${{ github.event_name }}"
+
+          # For pull_request events, use head_ref (source branch) for matching
+          # For push events, use the actual ref
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            REF="refs/heads/${{ github.head_ref }}"
+            DEPLOY_ALLOWED="false"
+          else
+            REF="${{ github.ref }}"
+            DEPLOY_ALLOWED="true"
+          fi
 
           if [ ! -f "$CONFIG" ]; then
             echo "::error::Config file $CONFIG not found"
@@ -69,6 +79,7 @@ jobs:
             const fs = require('fs');
             const config = JSON.parse(fs.readFileSync('$CONFIG'));
             const ref = '$REF';
+            const deployAllowed = '$DEPLOY_ALLOWED' === 'true';
 
             let matched = null;
             for (const [name, env] of Object.entries(config.environments || {})) {
@@ -94,7 +105,7 @@ jobs:
                 hugo_source: config.hugo?.source || 'hugo',
                 baseurl: replaceVars(matched.baseurl || ''),
                 output: config.output || 'public',
-                should_deploy: 'true',
+                should_deploy: deployAllowed ? 'true' : 'false',
                 gitops_repository: matched.gitops?.repository || '',
                 gitops_branch: matched.gitops?.branch || 'main',
                 gitops_file: replaceVars(matched.gitops?.file || ''),
@@ -131,11 +142,12 @@ jobs:
         run: |
           echo "## Environment Detection" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Event:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** \`${{ github.ref }}\`${{ github.event_name == 'pull_request' && format(' (head: {0})', github.head_ref) || '' }}" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** \`${{ steps.detect.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Hugo Environment:** \`${{ steps.detect.outputs.hugo_environment }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Base URL:** \`${{ steps.detect.outputs.baseurl || '(from Hugo config)' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Should Deploy:** \`${{ steps.detect.outputs.should_deploy }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Should Deploy:** \`${{ steps.detect.outputs.should_deploy }}\`${{ github.event_name == 'pull_request' && ' (disabled for PRs)' || '' }}" >> $GITHUB_STEP_SUMMARY
 
   lint-and-build:
     name: Lint and Build
