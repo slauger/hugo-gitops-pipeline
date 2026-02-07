@@ -104,12 +104,11 @@ jobs:
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
-          docker manifest push ${IMAGE}:${VERSION}
+          DIGEST=$(docker manifest push ${IMAGE}:${VERSION})
           docker manifest create ${IMAGE}:latest \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
           docker manifest push ${IMAGE}:latest
-          DIGEST=$(docker manifest inspect ${IMAGE}:${VERSION} -v | jq -r '.Descriptor.digest')
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
 
   # Runtime Image
@@ -198,12 +197,11 @@ jobs:
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
-          docker manifest push ${IMAGE}:${VERSION}
+          DIGEST=$(docker manifest push ${IMAGE}:${VERSION})
           docker manifest create ${IMAGE}:latest \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
           docker manifest push ${IMAGE}:latest
-          DIGEST=$(docker manifest inspect ${IMAGE}:${VERSION} -v | jq -r '.Descriptor.digest')
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
 
   # Cleanup Image
@@ -292,12 +290,11 @@ jobs:
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
-          docker manifest push ${IMAGE}:${VERSION}
+          DIGEST=$(docker manifest push ${IMAGE}:${VERSION})
           docker manifest create ${IMAGE}:latest \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
           docker manifest push ${IMAGE}:latest
-          DIGEST=$(docker manifest inspect ${IMAGE}:${VERSION} -v | jq -r '.Descriptor.digest')
           echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
 
   # Upload Release Asset
