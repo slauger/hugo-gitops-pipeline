@@ -1,0 +1,350 @@
+name: Auto PR Creation
+
+on:
+  workflow_call:
+    inputs:
+      main_branch:
+        description: 'Main/production branch name'
+        required: false
+        type: string
+        default: 'main'
+      develop_branch:
+        description: 'Development branch name'
+        required: false
+        type: string
+        default: 'develop'
+      language:
+        description: 'Language for PR description (de/en)'
+        required: false
+        type: string
+        default: 'de'
+      site_url:
+        description: 'Production site URL (optional, for footer)'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      GH_PAT:
+        required: true
+        description: 'GitHub Personal Access Token with repo and pull-request permissions'
+
+jobs:
+  create-pr:
+    name: Create Pull Request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine PR direction
+        id: pr-config
+        run: |
+          REF="${{ github.ref }}"
+          BRANCH_NAME="${REF#refs/heads/}"
+          MAIN_BRANCH="${{ inputs.main_branch }}"
+          DEVELOP_BRANCH="${{ inputs.develop_branch }}"
+
+          # Determine base branch based on source
+          if [ "$BRANCH_NAME" = "$DEVELOP_BRANCH" ]; then
+            # develop -> main
+            echo "base=$MAIN_BRANCH" >> $GITHUB_OUTPUT
+            echo "head=$DEVELOP_BRANCH" >> $GITHUB_OUTPUT
+            echo "source=$DEVELOP_BRANCH" >> $GITHUB_OUTPUT
+            echo "target=$MAIN_BRANCH" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            # feature branch -> develop
+            echo "base=$DEVELOP_BRANCH" >> $GITHUB_OUTPUT
+            echo "head=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            echo "source=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            echo "target=$DEVELOP_BRANCH" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if PR already exists
+        id: check-pr
+        run: |
+          PR_COUNT=$(gh pr list --base ${{ steps.pr-config.outputs.base }} --head ${{ steps.pr-config.outputs.head }} --state open --json number --jq 'length')
+          echo "count=$PR_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$PR_COUNT" -gt 0 ]; then
+            PR_NUMBER=$(gh pr list --base ${{ steps.pr-config.outputs.base }} --head ${{ steps.pr-config.outputs.head }} --state open --json number --jq '.[0].number')
+            echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+            PR_BODY=$(gh pr view $PR_NUMBER --json body --jq '.body')
+            if echo "$PR_BODY" | grep -q "🤖.*GitHub Actions & AI"; then
+              echo "is_auto=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_auto=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "is_auto=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Analyze changes with AI
+        if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
+        id: analyze
+        run: |
+          SOURCE="${{ steps.pr-config.outputs.source }}"
+          TARGET="${{ steps.pr-config.outputs.target }}"
+
+          git fetch origin $TARGET:$TARGET 2>/dev/null || true
+
+          COMMITS=$(git log $TARGET..HEAD --pretty=format:"- %s (%h)" --no-merges | head -10)
+          FILES_CHANGED=$(git diff $TARGET..HEAD --stat | head -30)
+          DIFF=$(git diff $TARGET..HEAD -- '*.html' '*.css' '*.yml' '*.yaml' '*.md' '*.js' '*.ts' '*.toml' '*.json' '*.go' '*.py' | head -c 8000)
+
+          if [ "${{ inputs.language }}" = "de" ]; then
+            cat > /tmp/analysis_prompt.txt <<EOF
+          Erstelle eine PR-Beschreibung auf Deutsch für diese Änderungen. Erkläre WARUM, nicht nur WAS.
+
+          Branch: $SOURCE -> $TARGET
+
+          Commits:
+          $COMMITS
+
+          Dateien:
+          $FILES_CHANGED
+
+          Diff:
+          \`\`\`
+          $DIFF
+          \`\`\`
+
+          Format:
+          ## [Emoji] Titel (max 60 Zeichen)
+
+          ## 🎯 Ziel
+          - WARUM diese Änderungen?
+          - Welches Problem wird gelöst?
+
+          ## 📝 Änderungen
+          - Was, WARUM, Zweck (4-6 Punkte)
+
+          ## 👥 Auswirkungen
+          - User-Sicht
+
+          ## ✅ Testing
+          - Wie getestet?
+          EOF
+          else
+            cat > /tmp/analysis_prompt.txt <<EOF
+          Create a PR description in English for these changes. Explain WHY, not just WHAT.
+
+          Branch: $SOURCE -> $TARGET
+
+          Commits:
+          $COMMITS
+
+          Files:
+          $FILES_CHANGED
+
+          Diff:
+          \`\`\`
+          $DIFF
+          \`\`\`
+
+          Format:
+          ## [Emoji] Title (max 60 chars)
+
+          ## 🎯 Goal
+          - WHY these changes?
+          - What problem is solved?
+
+          ## 📝 Changes
+          - What, WHY, purpose (4-6 points)
+
+          ## 👥 Impact
+          - User perspective
+
+          ## ✅ Testing
+          - How tested?
+          EOF
+          fi
+
+          PROMPT_CONTENT=$(cat /tmp/analysis_prompt.txt)
+
+          REQUEST_JSON=$(jq -n \
+            --arg system "Technical writer for PR descriptions. Explain WHY and PURPOSE, not just WHAT. Detailed and understandable. Use the given structure." \
+            --arg user "$PROMPT_CONTENT" \
+            '{
+              "messages": [
+                {"role": "system", "content": $system},
+                {"role": "user", "content": $user}
+              ],
+              "model": "gpt-4o",
+              "temperature": 0.7,
+              "max_tokens": 1500
+            }')
+
+          API_RESPONSE=$(echo "$REQUEST_JSON" | curl -s -X POST \
+            "https://models.inference.ai.azure.com/chat/completions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -d @-)
+
+          ANALYSIS=$(echo "$API_RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+          if [ -z "$ANALYSIS" ]; then
+            ANALYSIS="## Changes: $SOURCE -> $TARGET
+
+          $COMMITS
+
+          ### Changed Files
+          \`\`\`
+          $FILES_CHANGED
+          \`\`\`"
+          fi
+
+          echo "$ANALYSIS" > /tmp/pr_description.txt
+          echo "description_file=/tmp/pr_description.txt" >> $GITHUB_OUTPUT
+
+      - name: Extract PR title
+        if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
+        id: extract-title
+        run: |
+          TITLE=$(head -1 /tmp/pr_description.txt | sed 's/^# //' | sed 's/^## //' | sed 's/^\*\*//' | sed 's/\*\*$//')
+
+          if [ -z "$TITLE" ]; then
+            if [ "${{ steps.pr-config.outputs.is_release }}" = "true" ]; then
+              TITLE="🚀 Release: ${{ steps.pr-config.outputs.source }} -> ${{ steps.pr-config.outputs.target }}"
+            else
+              TITLE="🔧 Feature: ${{ steps.pr-config.outputs.source }}"
+            fi
+          fi
+
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+
+      - name: Build footer
+        if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
+        id: footer
+        run: |
+          IS_RELEASE="${{ steps.pr-config.outputs.is_release }}"
+          SITE_URL="${{ inputs.site_url }}"
+          LANG="${{ inputs.language }}"
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            if [ "$LANG" = "de" ]; then
+              FOOTER="---
+
+          ## Deployment Info
+
+          **Source:** \`${{ steps.pr-config.outputs.source }}\` branch
+          **Target:** \`${{ steps.pr-config.outputs.target }}\` branch
+
+          ### Nach dem Merge:
+          - ✅ Production deployment wird ausgelöst"
+              if [ -n "$SITE_URL" ]; then
+                FOOTER="$FOOTER
+          - 🌐 Site: $SITE_URL"
+              fi
+              FOOTER="$FOOTER
+
+          ### Review Checklist:
+          - [ ] Staging/Preview sieht korrekt aus
+          - [ ] Keine Console Errors
+          - [ ] Alle Seiten laden korrekt
+
+          ---
+
+          🤖 Automatisch generiert mit GitHub Actions & AI"
+            else
+              FOOTER="---
+
+          ## Deployment Info
+
+          **Source:** \`${{ steps.pr-config.outputs.source }}\` branch
+          **Target:** \`${{ steps.pr-config.outputs.target }}\` branch
+
+          ### After merge:
+          - ✅ Production deployment will be triggered"
+              if [ -n "$SITE_URL" ]; then
+                FOOTER="$FOOTER
+          - 🌐 Site: $SITE_URL"
+              fi
+              FOOTER="$FOOTER
+
+          ### Review Checklist:
+          - [ ] Staging/Preview looks correct
+          - [ ] No console errors
+          - [ ] All pages load correctly
+
+          ---
+
+          🤖 Auto-generated with GitHub Actions & AI"
+            fi
+          else
+            if [ "$LANG" = "de" ]; then
+              FOOTER="---
+
+          ## Branch Info
+
+          **Feature Branch:** \`${{ steps.pr-config.outputs.source }}\`
+          **Target:** \`${{ steps.pr-config.outputs.target }}\`
+
+          ### Nächste Schritte:
+          1. Review der Änderungen
+          2. Tests prüfen
+          3. Nach Merge: PR zu \`${{ inputs.main_branch }}\` wird erstellt
+
+          ---
+
+          🤖 Generiert mit GitHub Actions & AI"
+            else
+              FOOTER="---
+
+          ## Branch Info
+
+          **Feature Branch:** \`${{ steps.pr-config.outputs.source }}\`
+          **Target:** \`${{ steps.pr-config.outputs.target }}\`
+
+          ### Next Steps:
+          1. Review changes
+          2. Check tests
+          3. After merge: PR to \`${{ inputs.main_branch }}\` will be created
+
+          ---
+
+          🤖 Generated with GitHub Actions & AI"
+            fi
+          fi
+
+          # Save footer to file for multiline handling
+          echo "$FOOTER" > /tmp/pr_footer.txt
+          echo "file=/tmp/pr_footer.txt" >> $GITHUB_OUTPUT
+
+      - name: Update existing PR
+        if: steps.check-pr.outputs.count != '0' && steps.check-pr.outputs.is_auto == 'true'
+        run: |
+          DESCRIPTION=$(tail -n +2 ${{ steps.analyze.outputs.description_file }})
+          FOOTER=$(cat ${{ steps.footer.outputs.file }})
+
+          gh pr edit ${{ steps.check-pr.outputs.number }} \
+            --title "${{ steps.extract-title.outputs.title }}" \
+            --body "$DESCRIPTION
+
+          $FOOTER
+          ⚡ Auto-updated on new commits"
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+
+      - name: Create Pull Request
+        if: steps.check-pr.outputs.count == '0'
+        run: |
+          DESCRIPTION=$(tail -n +2 ${{ steps.analyze.outputs.description_file }})
+          FOOTER=$(cat ${{ steps.footer.outputs.file }})
+
+          gh pr create \
+            --title "${{ steps.extract-title.outputs.title }}" \
+            --body "$DESCRIPTION
+
+          $FOOTER" \
+            --base ${{ steps.pr-config.outputs.base }} \
+            --head ${{ steps.pr-config.outputs.head }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
