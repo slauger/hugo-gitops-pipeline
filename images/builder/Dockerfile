@@ -13,13 +13,16 @@ RUN apk add --no-cache \
     libstdc++ \
     curl \
     bash \
+    jq \
     && curl -L "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz" \
     | tar -xz -C /usr/local/bin \
     && hugo version
 
-# Install copy-assets CLI
-COPY scripts/copy-assets /usr/local/bin/copy-assets
-RUN chmod +x /usr/local/bin/copy-assets
+# Install pipeline defaults and scripts
+COPY defaults.json /builder/defaults.json
+COPY bin/copy-assets /usr/local/bin/copy-assets
+COPY bin/run-phase /usr/local/bin/run-phase
+RUN chmod +x /usr/local/bin/copy-assets /usr/local/bin/run-phase
 
 WORKDIR /build
 

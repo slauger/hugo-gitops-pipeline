@@ -1,0 +1,49 @@
+#!/bin/sh
+set -e
+
+PHASE=$1
+CONFIG=${2:-project.json}
+DEFAULTS=/builder/defaults.json
+
+if [ -z "$PHASE" ]; then
+  echo "Usage: run-phase <phase> [config]"
+  echo "Phases: build, lint, test, or custom"
+  exit 1
+fi
+
+# Check if phase should run (is it in the steps array?)
+if [ -f "$CONFIG" ]; then
+  PHASES=$(jq -r --arg def "$(jq -r '.steps | join(",")' $DEFAULTS)" \
+    '(.steps // ($def | split(","))) | join(",")' "$CONFIG")
+else
+  PHASES=$(jq -r '.steps | join(",")' $DEFAULTS)
+fi
+
+if ! echo "$PHASES" | grep -qw "$PHASE"; then
+  echo "Phase '$PHASE' not in steps, skipping"
+  exit 0
+fi
+
+# Get steps for this phase (project overrides defaults)
+if [ -f "$CONFIG" ]; then
+  STEPS=$(jq -r --arg phase "$PHASE" \
+    --slurpfile defaults "$DEFAULTS" \
+    '(.[$phase].steps // $defaults[0][$phase].steps // []) | .[]' \
+    "$CONFIG" 2>/dev/null)
+else
+  STEPS=$(jq -r --arg phase "$PHASE" '.[$phase].steps // [] | .[]' "$DEFAULTS")
+fi
+
+if [ -z "$STEPS" ]; then
+  echo "No steps for phase '$PHASE'"
+  exit 0
+fi
+
+echo "=== Running phase: $PHASE ==="
+echo "$STEPS" | while IFS= read -r cmd; do
+  # Expand environment variables in command
+  expanded=$(eval echo "$cmd")
+  echo "+ $expanded"
+  eval "$expanded"
+done
+echo "=== Phase $PHASE complete ==="

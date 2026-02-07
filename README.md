@@ -10,6 +10,7 @@ A complete, reusable CI/CD pipeline for Hugo sites with GitOps deployment to Kub
 - 🔄 **GitOps Ready** - Automated deployment via ArgoCD with [gitops-image-replacer](https://github.com/slauger/gitops-image-replacer)
 - 🌍 **Multi-Environment** - Support for dev, staging, QA, production with branch-based deployment
 - 📦 **Reusable Workflow** - Single `workflow_call` for all your Hugo sites
+- 🛠️ **Flexible Build Steps** - Customize build/lint/test phases or add your own
 - 🐳 **Container Images** - Builder (Node.js + Hugo), Runtime (hardened nginx), Cleanup (registry GC)
 - 🔒 **Security** - Pinned image digests, non-root containers, security headers
 - 🏷️ **Semantic Versioning** - Automated releases with [semantic-release](https://github.com/semantic-release/semantic-release)
@@ -96,6 +97,7 @@ jobs:
 |---|---|
 | [Getting Started](https://slauger.github.io/hugo-gitops-pipeline/getting-started/) | Step-by-step setup guide |
 | [Configuration](https://slauger.github.io/hugo-gitops-pipeline/configuration/) | All `project.json` options |
+| [Build Steps](https://slauger.github.io/hugo-gitops-pipeline/build-steps/) | Customize build phases |
 | [Environments](https://slauger.github.io/hugo-gitops-pipeline/environments/) | Multi-environment setup |
 | [Architecture](https://slauger.github.io/hugo-gitops-pipeline/architecture/) | GDPR-compliant reference architecture |
 

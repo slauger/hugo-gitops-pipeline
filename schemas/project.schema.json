@@ -4,6 +4,73 @@
   "title": "Hugo GitOps Project Configuration",
   "type": "object",
   "properties": {
+    "steps": {
+      "type": "array",
+      "description": "Build phases to run (defaults: build, lint, test)",
+      "items": {
+        "type": "string"
+      },
+      "default": ["build", "lint", "test"]
+    },
+    "build": {
+      "type": "object",
+      "description": "Build phase configuration",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "Commands to run during build phase",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "lint": {
+      "type": "object",
+      "description": "Lint phase configuration",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "Commands to run during lint phase",
+          "items": {
+            "type": "string"
+          }
+        },
+        "htmlhint": {
+          "type": "boolean",
+          "description": "Enable HTMLHint validation (deprecated, use steps)",
+          "default": true
+        },
+        "links": {
+          "type": "boolean",
+          "description": "Enable broken link checking (deprecated, use steps)",
+          "default": false
+        },
+        "a11y": {
+          "type": "boolean",
+          "description": "Enable accessibility checks (deprecated, use steps)",
+          "default": false
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "description": "Test phase configuration",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "description": "Commands to run during test phase",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "string",
+      "description": "Build output directory",
+      "default": "public"
+    },
     "hugo": {
       "type": "object",
       "description": "Hugo configuration",
@@ -38,27 +105,6 @@
         "required": ["from", "to"]
       }
     },
-    "lint": {
-      "type": "object",
-      "description": "Linting configuration",
-      "properties": {
-        "htmlhint": {
-          "type": "boolean",
-          "description": "Enable HTMLHint validation",
-          "default": true
-        },
-        "links": {
-          "type": "boolean",
-          "description": "Enable broken link checking",
-          "default": false
-        },
-        "a11y": {
-          "type": "boolean",
-          "description": "Enable accessibility checks",
-          "default": false
-        }
-      }
-    },
     "nginx": {
       "type": "object",
       "description": "Nginx configuration",
@@ -79,6 +125,10 @@
           "when": {
             "type": "string",
             "description": "Regex pattern to match against GITHUB_REF"
+          },
+          "environment": {
+            "type": "string",
+            "description": "Hugo environment name (production, staging, development)"
           },
           "baseurl": {
             "type": "string",
@@ -115,7 +165,7 @@
             "required": ["repository", "file"]
           }
         },
-        "required": ["when", "baseurl"]
+        "required": ["when"]
       }
     }
   }

@@ -18,6 +18,8 @@ Use the JSON schema for validation and autocompletion in your editor:
 {
   "$schema": "https://raw.githubusercontent.com/slauger/hugo-gitops-pipeline/main/schemas/project.schema.json",
 
+  "output": "public",
+
   "hugo": {
     "source": "hugo",
     "config": "hugo.toml"
@@ -29,12 +31,6 @@ Use the JSON schema for validation and autocompletion in your editor:
     {"from": "assets/brand/", "to": "hugo/static/images/brand/"}
   ],
 
-  "lint": {
-    "htmlhint": true,
-    "links": false,
-    "a11y": false
-  },
-
   "nginx": {
     "config_dir": "nginx/"
   },
@@ -43,11 +39,11 @@ Use the JSON schema for validation and autocompletion in your editor:
     "feature": {
       "when": "^refs/heads/feature/.*$",
       "environment": "development",
-      "baseurl": "https://dev.example.com",
+      "baseurl": "https://${BRANCH_SLUG}.dev.example.com",
       "gitops": {
         "repository": "myorg/gitops",
         "branch": "main",
-        "file": "apps/mysite/values-dev.yaml"
+        "file": "apps/mysite/values-${BRANCH_SLUG}.yaml"
       }
     },
     "staging": {
@@ -73,6 +69,28 @@ Use the JSON schema for validation and autocompletion in your editor:
 ```
 
 ## Sections
+
+### steps
+
+Build phases to run. Defaults to `["build", "lint", "test"]`.
+
+```json
+{
+  "steps": ["build", "lint", "test"]
+}
+```
+
+See [Build Steps](build-steps.md) for customizing build phases.
+
+### output
+
+Build output directory. Defaults to `public`.
+
+```json
+{
+  "output": "public"
+}
+```
 
 ### hugo
 
@@ -101,15 +119,16 @@ Assets to copy before build. Useful for npm packages or external assets.
 | `from` | string | Source path (file or directory) |
 | `to` | string | Destination directory |
 
-### lint
+### lint (deprecated)
 
-Enable or disable linting tools.
+> **Note:** The `lint.htmlhint`, `lint.links`, and `lint.a11y` options are deprecated. Use [Build Steps](build-steps.md) to customize linting.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `htmlhint` | boolean | `true` | HTML validation |
-| `links` | boolean | `false` | Broken link checking |
-| `a11y` | boolean | `false` | Accessibility checks |
+| `steps` | array | (see defaults) | Custom lint commands |
+| `htmlhint` | boolean | `true` | HTML validation (deprecated) |
+| `links` | boolean | `false` | Broken link checking (deprecated) |
+| `a11y` | boolean | `false` | Accessibility checks (deprecated) |
 
 ### nginx
 
