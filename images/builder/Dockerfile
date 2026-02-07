@@ -18,6 +18,10 @@ RUN apk add --no-cache \
     | tar -xz -C /usr/local/bin \
     && hugo version
 
+# Install linting tools
+COPY package.json package-lock.json /builder/
+RUN cd /builder && npm ci && npm link
+
 # Install pipeline defaults and scripts
 COPY defaults.json /builder/defaults.json
 COPY bin/copy-assets /usr/local/bin/copy-assets
