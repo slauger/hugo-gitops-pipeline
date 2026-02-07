@@ -44,6 +44,7 @@ jobs:
         with:
           context: images/builder
           push: true
+          provenance: false
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/builder:v${{ inputs.version }}-linux-amd64
           cache-from: type=gha,scope=builder-amd64
@@ -74,6 +75,7 @@ jobs:
         with:
           context: images/builder
           push: true
+          provenance: false
           platforms: linux/arm64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/builder:v${{ inputs.version }}-linux-arm64
           cache-from: type=gha,scope=builder-arm64
@@ -136,6 +138,7 @@ jobs:
         with:
           context: images/runtime
           push: true
+          provenance: false
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/runtime:v${{ inputs.version }}-linux-amd64
           cache-from: type=gha,scope=runtime-amd64
@@ -166,6 +169,7 @@ jobs:
         with:
           context: images/runtime
           push: true
+          provenance: false
           platforms: linux/arm64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/runtime:v${{ inputs.version }}-linux-arm64
           cache-from: type=gha,scope=runtime-arm64
@@ -228,6 +232,7 @@ jobs:
         with:
           context: images/cleanup
           push: true
+          provenance: false
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/cleanup:v${{ inputs.version }}-linux-amd64
           cache-from: type=gha,scope=cleanup-amd64
@@ -258,6 +263,7 @@ jobs:
         with:
           context: images/cleanup
           push: true
+          provenance: false
           platforms: linux/arm64
           tags: ${{ env.REGISTRY }}/${{ github.repository }}/cleanup:v${{ inputs.version }}-linux-arm64
           cache-from: type=gha,scope=cleanup-arm64
