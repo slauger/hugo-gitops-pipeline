@@ -255,10 +255,11 @@ jobs:
           ENV OUTPUT=${{ needs.detect-environment.outputs.output }}
           ENV BASEURL=${{ needs.detect-environment.outputs.baseurl }}
           RUN run-phase build ${{ inputs.project_config }}
+          RUN mkdir -p /nginx-config && if [ -d nginx ]; then cp -r nginx/* /nginx-config/; fi
 
           FROM ${{ env.RUNTIME_IMAGE }}
           COPY --from=builder /build/${{ needs.detect-environment.outputs.hugo_source }}/${{ needs.detect-environment.outputs.output }} /usr/share/nginx/html
-          COPY nginx/ /etc/nginx/conf.d/ 2>/dev/null || true
+          COPY --from=builder /nginx-config/ /etc/nginx/conf.d/
           EOF
 
       - name: Build and push Docker image
