@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Detect environment from project.json
         id: detect
@@ -146,7 +146,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run build phase
         run: run-phase build ${{ inputs.project_config }}
@@ -171,7 +171,7 @@ jobs:
           OUTPUT: ${{ needs.detect-environment.outputs.output }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hugo-public
           path: ${{ needs.detect-environment.outputs.hugo_source }}/${{ needs.detect-environment.outputs.output }}/
@@ -192,7 +192,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve pipeline images from release
         env:
@@ -251,7 +251,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.generated
@@ -277,11 +277,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.GITOPS_APP_ID }}
           private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
