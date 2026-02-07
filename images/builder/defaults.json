@@ -2,7 +2,7 @@
   "steps": ["build", "lint", "test"],
   "build": {
     "steps": [
-      "npm ci",
+      "[ -f package.json ] && npm ci || true",
       "copy-assets ${CONFIG:-project.json}",
       "cd ${HUGO_SOURCE:-.} && hugo --minify --environment ${ENVIRONMENT:-production} ${BASEURL:+--baseURL $BASEURL}"
     ]
