@@ -94,8 +94,8 @@ jobs:
 
 ## Documentation
 
-| | |
-|---|---|
+| Guide | Description |
+|-------|-------------|
 | [Getting Started](https://slauger.github.io/hugo-gitops-pipeline/getting-started/) | Step-by-step setup guide |
 | [Configuration](https://slauger.github.io/hugo-gitops-pipeline/configuration/) | All `project.json` options |
 | [Build Steps](https://slauger.github.io/hugo-gitops-pipeline/build-steps/) | Customize build phases |
