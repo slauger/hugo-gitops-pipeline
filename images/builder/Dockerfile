@@ -6,7 +6,7 @@ FROM node:24-alpine@sha256:cd6fb7efa6490f039f3471a189214d5f548c11df1ff9e5b181aa4
 
 ARG HUGO_VERSION=0.155.2
 
-# Install dependencies and Hugo extended
+# Install dependencies
 RUN apk add --no-cache \
     git \
     libc6-compat \
@@ -14,10 +14,14 @@ RUN apk add --no-cache \
     curl \
     bash \
     jq \
-    tzdata \
-    && curl -L "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz" \
-    | tar -xz -C /usr/local/bin \
-    && hugo version
+    tzdata
+
+# Install Hugo extended (architecture-aware)
+ARG TARGETARCH
+RUN HUGO_ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "amd64") && \
+    curl -L "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-${HUGO_ARCH}.tar.gz" \
+    | tar -xz -C /usr/local/bin && \
+    hugo version
 
 # Install linting tools
 COPY package.json package-lock.json /builder/
