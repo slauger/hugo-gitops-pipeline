@@ -7,7 +7,8 @@
   "packageRules": [
     {
       "matchManagers": ["dockerfile"],
-      "groupName": "docker base images"
+      "groupName": "docker base images",
+      "semanticCommitType": "fix"
     },
     {
       "matchManagers": ["github-actions"],
@@ -27,7 +28,8 @@
       "matchStrings": ["ARG HUGO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "gohugoio/hugo",
       "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "semanticCommitType": "fix"
     },
     {
       "customType": "regex",
