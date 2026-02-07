@@ -45,6 +45,7 @@ jobs:
       output: ${{ steps.detect.outputs.output }}
       should_deploy: ${{ steps.detect.outputs.should_deploy }}
       gitops_repository: ${{ steps.detect.outputs.gitops_repository }}
+      gitops_repo_name: ${{ steps.detect.outputs.gitops_repo_name }}
       gitops_branch: ${{ steps.detect.outputs.gitops_branch }}
       gitops_file: ${{ steps.detect.outputs.gitops_file }}
       gitops_owner: ${{ steps.detect.outputs.gitops_owner }}
@@ -107,6 +108,7 @@ jobs:
                 output: config.output || 'public',
                 should_deploy: deployAllowed ? 'true' : 'false',
                 gitops_repository: matched.gitops?.repository || '',
+                gitops_repo_name: (matched.gitops?.repository || '').split('/')[1] || '',
                 gitops_branch: matched.gitops?.branch || 'main',
                 gitops_file: replaceVars(matched.gitops?.file || ''),
                 gitops_owner: (matched.gitops?.repository || '').split('/')[0] || ''
@@ -120,6 +122,7 @@ jobs:
                 output: config.output || 'public',
                 should_deploy: 'false',
                 gitops_repository: '',
+                gitops_repo_name: '',
                 gitops_branch: '',
                 gitops_file: '',
                 gitops_owner: ''
@@ -134,6 +137,7 @@ jobs:
           echo "output=$(echo $RESULT | jq -r '.output')" >> $GITHUB_OUTPUT
           echo "should_deploy=$(echo $RESULT | jq -r '.should_deploy')" >> $GITHUB_OUTPUT
           echo "gitops_repository=$(echo $RESULT | jq -r '.gitops_repository')" >> $GITHUB_OUTPUT
+          echo "gitops_repo_name=$(echo $RESULT | jq -r '.gitops_repo_name')" >> $GITHUB_OUTPUT
           echo "gitops_branch=$(echo $RESULT | jq -r '.gitops_branch')" >> $GITHUB_OUTPUT
           echo "gitops_file=$(echo $RESULT | jq -r '.gitops_file')" >> $GITHUB_OUTPUT
           echo "gitops_owner=$(echo $RESULT | jq -r '.gitops_owner')" >> $GITHUB_OUTPUT
@@ -299,7 +303,7 @@ jobs:
           app-id: ${{ secrets.GITOPS_APP_ID }}
           private-key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
           owner: ${{ needs.detect-environment.outputs.gitops_owner }}
-          repositories: ${{ needs.detect-environment.outputs.gitops_repository }}
+          repositories: ${{ needs.detect-environment.outputs.gitops_repo_name }}
 
       - name: Generate gitops-image-replacer config
         run: |
