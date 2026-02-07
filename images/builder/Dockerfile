@@ -23,7 +23,7 @@ COPY package.json package-lock.json /builder/
 RUN cd /builder && npm ci && npm link
 
 # Install pipeline defaults and scripts
-COPY defaults.json /builder/defaults.json
+COPY defaults.json .htmlhintrc /builder/
 COPY bin/copy-assets /usr/local/bin/copy-assets
 COPY bin/run-phase /usr/local/bin/run-phase
 RUN chmod +x /usr/local/bin/copy-assets /usr/local/bin/run-phase
