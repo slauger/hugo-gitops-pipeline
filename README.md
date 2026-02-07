@@ -79,6 +79,7 @@ name: CI/CD
 on:
   push:
     branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   pipeline:

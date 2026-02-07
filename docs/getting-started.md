@@ -55,8 +55,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+  workflow_dispatch:
 
 jobs:
   pipeline:
