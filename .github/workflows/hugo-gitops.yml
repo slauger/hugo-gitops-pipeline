@@ -311,7 +311,7 @@ jobs:
           cat gitops-image-replacer.json
 
       - name: Install gitops-image-replacer
-        run: pip install gitops-image-replacer==0.3.0
+        run: pip install gitops-image-replacer==1.1.0
 
       - name: Update image in GitOps repository
         env:
