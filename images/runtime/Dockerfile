@@ -2,7 +2,7 @@
 # Hardened nginx for serving static Hugo sites
 
 # renovate: datasource=docker depName=nginx
-FROM nginx:1.29-alpine@sha256:5878d06ae4c83d73285438255f705bb3f9a736f41cd24876ed25bb33faf76c7d
+FROM nginx:1.29-alpine@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0
 
 LABEL maintainer="Simon Lauger <simon@lauger.de>"
 LABEL description="Hardened nginx for Hugo static sites"
