@@ -25,8 +25,8 @@ on:
         default: ''
     secrets:
       GH_PAT:
-        required: true
-        description: 'GitHub Personal Access Token with repo and pull-request permissions'
+        required: false
+        description: 'GitHub Personal Access Token with repo and pull-request permissions (falls back to GITHUB_TOKEN if not set)'
 
 jobs:
   create-pr:
@@ -84,7 +84,7 @@ jobs:
             echo "is_auto=false" >> $GITHUB_OUTPUT
           fi
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
 
       - name: Analyze changes with AI
         if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
@@ -331,7 +331,7 @@ jobs:
           $FOOTER
           ⚡ Auto-updated on new commits"
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
 
       - name: Create Pull Request
         if: steps.check-pr.outputs.count == '0'
@@ -347,4 +347,4 @@ jobs:
             --base ${{ steps.pr-config.outputs.base }} \
             --head ${{ steps.pr-config.outputs.head }}
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
