@@ -30,6 +30,19 @@ A hardened nginx image for serving static Hugo sites:
 - Cache headers for static assets
 - Health check endpoint
 
+### URL Handling
+
+The runtime image is optimized for Hugo's pretty URL format (`/page/index.html`):
+
+- **No trailing slash redirects** - `/leistungen` serves `leistungen/index.html` directly (200)
+- **Trailing slash removal** - `/leistungen/` redirects to `/leistungen` (301) to prevent duplicate content
+- **Fallback to .html** - `/page` also checks for `page.html` as fallback
+- **Clean canonical URLs** - One URL per page, no ambiguity for search engines
+
+### Custom nginx Configuration
+
+You can extend the nginx configuration by placing `.conf` files in a `nginx/` directory at the root of your Hugo project. These are included via `include /etc/nginx/conf.d/*.conf;`.
+
 ### Security Features
 
 - Runs as non-root user
