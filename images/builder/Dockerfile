@@ -4,7 +4,7 @@
 # renovate: datasource=docker depName=node
 FROM node:24-alpine@sha256:21f403ab171f2dc89bad4dd69d7721bfd15f084ccb46cdd225f31f2bc59b5c9a
 
-ARG HUGO_VERSION=0.163.2
+ARG HUGO_VERSION=0.165.0
 
 # Install dependencies
 RUN apk add --no-cache \
