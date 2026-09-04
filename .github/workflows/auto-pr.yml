@@ -27,6 +27,9 @@ on:
       GH_PAT:
         required: false
         description: 'GitHub Personal Access Token with repo and pull-request permissions (falls back to GITHUB_TOKEN if not set)'
+      LLM_API_KEY:
+        required: false
+        description: 'Optional API key for an OpenAI-compatible chat/completions endpoint. Without it the PR description is the generated commit summary. GitHub Models, which this workflow used to call for free, was retired, so there is no default endpoint.'
 
 jobs:
   create-pr:
@@ -74,8 +77,9 @@ jobs:
             PR_NUMBER=$(gh pr list --base ${{ steps.pr-config.outputs.base }} --head ${{ steps.pr-config.outputs.head }} --state open --json number --jq '.[0].number')
             echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
+            # Matches both the current marker and the older "GitHub Actions & AI" one
             PR_BODY=$(gh pr view $PR_NUMBER --json body --jq '.body')
-            if echo "$PR_BODY" | grep -q "🤖.*GitHub Actions & AI"; then
+            if echo "$PR_BODY" | grep -q "🤖.*GitHub Actions"; then
               echo "is_auto=true" >> $GITHUB_OUTPUT
             else
               echo "is_auto=false" >> $GITHUB_OUTPUT
@@ -86,138 +90,167 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
 
-      - name: Analyze changes with AI
+      - name: Generate PR description
         if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
         id: analyze
+        env:
+          # Optional. Without a key the categorized commit summary below is the
+          # description. GitHub Models, which this step used to call, was
+          # retired, so there is no free default endpoint left. Any
+          # OpenAI-compatible chat/completions URL works, for example
+          # https://api.groq.com/openai/v1/chat/completions
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_API_URL: ${{ vars.LLM_API_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
           SOURCE="${{ steps.pr-config.outputs.source }}"
           TARGET="${{ steps.pr-config.outputs.target }}"
+          LANGUAGE="${{ inputs.language }}"
 
           git fetch origin $TARGET:$TARGET 2>/dev/null || true
 
-          COMMITS=$(git log $TARGET..HEAD --pretty=format:"- %s (%h)" --no-merges | head -10)
-          FILES_CHANGED=$(git diff $TARGET..HEAD --stat | head -30)
-          DIFF=$(git diff $TARGET..HEAD -- '*.html' '*.css' '*.yml' '*.yaml' '*.md' '*.js' '*.ts' '*.toml' '*.json' '*.go' '*.py' | head -c 8000)
+          FILES_CHANGED=$(git diff $TARGET..HEAD --stat | tail -40)
 
-          if [ "${{ inputs.language }}" = "de" ]; then
-            cat > /tmp/analysis_prompt.txt <<EOF
-          Erstelle eine PR-Beschreibung auf Deutsch für diese Änderungen. Erkläre WARUM, nicht nur WAS.
+          # Group the commits by their conventional-commit type so the
+          # description is useful on its own rather than a flat list.
+          if [ "$LANGUAGE" = "de" ]; then
+            L_FEAT="Features"; L_FIX="Fixes"; L_PERF="Performance"
+            L_REFACTOR="Refactoring"; L_TEST="Tests"; L_DOCS="Dokumentation"
+            L_CI="Build und CI"; L_CHORE="Chores"; L_OTHER="Sonstiges"
+            L_FILES="Geänderte Dateien"
+          else
+            L_FEAT="Features"; L_FIX="Fixes"; L_PERF="Performance"
+            L_REFACTOR="Refactoring"; L_TEST="Tests"; L_DOCS="Documentation"
+            L_CI="Build and CI"; L_CHORE="Chores"; L_OTHER="Other"
+            L_FILES="Files changed"
+          fi
 
-          Branch: $SOURCE -> $TARGET
+          {
+            emit_group() {
+              BODY=$(git log $TARGET..HEAD --pretty=format:"- %s (%h)" --no-merges \
+                | grep -E "^- $2(\(.+\))?!?: " || true)
+              if [ -n "$BODY" ]; then
+                printf '### %s\n\n%s\n\n' "$1" "$BODY"
+              fi
+            }
+            emit_group "$L_FEAT" "feat"
+            emit_group "$L_FIX" "fix"
+            emit_group "$L_PERF" "perf"
+            emit_group "$L_REFACTOR" "refactor"
+            emit_group "$L_TEST" "test"
+            emit_group "$L_DOCS" "docs"
+            emit_group "$L_CI" "(build|ci)"
+            emit_group "$L_CHORE" "chore"
 
-          Commits:
+            OTHER=$(git log $TARGET..HEAD --pretty=format:"- %s (%h)" --no-merges \
+              | grep -vE "^- (feat|fix|perf|refactor|test|docs|build|ci|chore)(\(.+\))?!?: " || true)
+            if [ -n "$OTHER" ]; then
+              printf '### %s\n\n%s\n\n' "$L_OTHER" "$OTHER"
+            fi
+
+            printf '<details>\n<summary>%s</summary>\n\n```\n%s\n```\n</details>\n' "$L_FILES" "$FILES_CHANGED"
+          } > /tmp/pr_description.txt
+
+          if [ -z "${LLM_API_KEY}" ] || [ -z "${LLM_API_URL}" ]; then
+            echo "::notice::No LLM_API_KEY/LLM_API_URL configured, using the generated commit summary"
+          else
+            COMMITS=$(git log $TARGET..HEAD --pretty=format:"- %s (%h)" --no-merges)
+
+            if [ "$LANGUAGE" = "de" ]; then
+              cat > /tmp/prompt.txt <<EOF
+          Schreibe eine PR-Beschreibung auf Deutsch für den Merge von $SOURCE nach $TARGET.
+          Erkläre WARUM, nicht nur WAS. Keine Titelzeile, kein Vorspann.
+
+          Alle Commits (vollständige Liste):
           $COMMITS
 
-          Dateien:
+          Geänderte Dateien:
           $FILES_CHANGED
 
-          Diff:
-          \`\`\`
-          $DIFF
-          \`\`\`
-
           Format:
-          ## [Emoji] Titel (max 60 Zeichen)
-
-          ## 🎯 Ziel
-          - WARUM diese Änderungen?
+          ## Ziel
           - Welches Problem wird gelöst?
 
-          ## 📝 Änderungen
-          - Was, WARUM, Zweck (4-6 Punkte)
+          ## Änderungen
+          - Kategorisierte Liste, die JEDEN Commit abdeckt
 
-          ## 👥 Auswirkungen
-          - User-Sicht
-
-          ## ✅ Testing
-          - Wie getestet?
+          ## Auswirkungen
+          - Sicht der Website-Besucher / des Betreibers
           EOF
-          else
-            cat > /tmp/analysis_prompt.txt <<EOF
-          Create a PR description in English for these changes. Explain WHY, not just WHAT.
+            else
+              cat > /tmp/prompt.txt <<EOF
+          Write a PR description in English for merging $SOURCE into $TARGET.
+          Explain WHY, not just WHAT. No title line, no preamble.
 
-          Branch: $SOURCE -> $TARGET
-
-          Commits:
+          All commits (complete list):
           $COMMITS
 
-          Files:
+          Files changed:
           $FILES_CHANGED
-
-          Diff:
-          \`\`\`
-          $DIFF
-          \`\`\`
 
           Format:
-          ## [Emoji] Title (max 60 chars)
-
-          ## 🎯 Goal
-          - WHY these changes?
+          ## Goal
           - What problem is solved?
 
-          ## 📝 Changes
-          - What, WHY, purpose (4-6 points)
+          ## Changes
+          - Categorized list covering EVERY commit
 
-          ## 👥 Impact
-          - User perspective
-
-          ## ✅ Testing
-          - How tested?
+          ## Impact
+          - Site visitor / operator perspective
           EOF
-          fi
+            fi
 
-          PROMPT_CONTENT=$(cat /tmp/analysis_prompt.txt)
+            REQUEST_JSON=$(jq -n \
+              --arg system "Technical writer for PR descriptions of a static website project. Explain WHY and PURPOSE, not just WHAT. Be professional and concise. Use the given structure." \
+              --arg user "$(cat /tmp/prompt.txt)" \
+              --arg model "${LLM_MODEL:-gpt-4.1}" \
+              '{
+                "messages": [
+                  {"role": "system", "content": $system},
+                  {"role": "user", "content": $user}
+                ],
+                "model": $model,
+                "temperature": 0.7,
+                "max_tokens": 1500
+              }')
 
-          REQUEST_JSON=$(jq -n \
-            --arg system "Technical writer for PR descriptions. Explain WHY and PURPOSE, not just WHAT. Detailed and understandable. Use the given structure." \
-            --arg user "$PROMPT_CONTENT" \
-            '{
-              "messages": [
-                {"role": "system", "content": $system},
-                {"role": "user", "content": $user}
-              ],
-              "model": "gpt-4o",
-              "temperature": 0.7,
-              "max_tokens": 1500
-            }')
+            # This step runs under `bash -e`, so a failing curl would abort it
+            # and the generated summary would never be used. Keep the exit code.
+            CURL_EXIT=0
+            API_RESPONSE=$(echo "$REQUEST_JSON" | curl -sS --max-time 120 -X POST \
+              "${LLM_API_URL}" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${LLM_API_KEY}" \
+              -d @- 2>/tmp/curl_err.txt) || CURL_EXIT=$?
 
-          API_RESPONSE=$(echo "$REQUEST_JSON" | curl -s -X POST \
-            "https://models.inference.ai.azure.com/chat/completions" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ github.token }}" \
-            -d @-)
+            ANALYSIS=$(printf '%s' "$API_RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null || true)
 
-          ANALYSIS=$(echo "$API_RESPONSE" | jq -r '.choices[0].message.content // empty')
-
-          if [ -z "$ANALYSIS" ]; then
-            ANALYSIS="## Changes: $SOURCE -> $TARGET
-
-          $COMMITS
-
-          ### Changed Files
-          \`\`\`
-          $FILES_CHANGED
-          \`\`\`"
-          fi
-
-          echo "$ANALYSIS" > /tmp/pr_description.txt
-          echo "description_file=/tmp/pr_description.txt" >> $GITHUB_OUTPUT
-
-      - name: Extract PR title
-        if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
-        id: extract-title
-        run: |
-          TITLE=$(head -1 /tmp/pr_description.txt | sed 's/^# //' | sed 's/^## //' | sed 's/^\*\*//' | sed 's/\*\*$//')
-
-          if [ -z "$TITLE" ]; then
-            if [ "${{ steps.pr-config.outputs.is_release }}" = "true" ]; then
-              TITLE="🚀 Release: ${{ steps.pr-config.outputs.source }} -> ${{ steps.pr-config.outputs.target }}"
+            if [ -n "$ANALYSIS" ]; then
+              printf '%s\n' "$ANALYSIS" > /tmp/pr_description.txt
             else
-              TITLE="🔧 Feature: ${{ steps.pr-config.outputs.source }}"
+              # Without this the next outage looks the same as a model that
+              # simply returned nothing.
+              echo "::warning::LLM request failed, using the generated commit summary"
+              echo "curl exit code: ${CURL_EXIT}"
+              if [ -s /tmp/curl_err.txt ]; then
+                sed 's/^/curl: /' /tmp/curl_err.txt
+              fi
+              printf '%s' "$API_RESPONSE" | head -c 500 | sed 's/^/response: /'
+              echo
             fi
           fi
 
+          echo "description_file=/tmp/pr_description.txt" >> $GITHUB_OUTPUT
+
+      - name: Build PR title
+        if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
+        id: extract-title
+        run: |
+          if [ "${{ steps.pr-config.outputs.is_release }}" = "true" ]; then
+            TITLE="🚀 Release: ${{ steps.pr-config.outputs.source }} -> ${{ steps.pr-config.outputs.target }}"
+          else
+            TITLE="🔧 Feature: ${{ steps.pr-config.outputs.source }}"
+          fi
           echo "title=$TITLE" >> $GITHUB_OUTPUT
 
       - name: Build footer
@@ -252,7 +285,7 @@ jobs:
 
           ---
 
-          🤖 Automatisch generiert mit GitHub Actions & AI"
+          🤖 Automatisch generiert mit GitHub Actions"
             else
               FOOTER="---
 
@@ -276,7 +309,7 @@ jobs:
 
           ---
 
-          🤖 Auto-generated with GitHub Actions & AI"
+          🤖 Auto-generated with GitHub Actions"
             fi
           else
             if [ "$LANG" = "de" ]; then
@@ -294,7 +327,7 @@ jobs:
 
           ---
 
-          🤖 Generiert mit GitHub Actions & AI"
+          🤖 Automatisch generiert mit GitHub Actions"
             else
               FOOTER="---
 
@@ -310,7 +343,7 @@ jobs:
 
           ---
 
-          🤖 Generated with GitHub Actions & AI"
+          🤖 Auto-generated with GitHub Actions"
             fi
           fi
 
@@ -321,7 +354,7 @@ jobs:
       - name: Update existing PR
         if: steps.check-pr.outputs.count != '0' && steps.check-pr.outputs.is_auto == 'true'
         run: |
-          DESCRIPTION=$(tail -n +2 ${{ steps.analyze.outputs.description_file }})
+          DESCRIPTION=$(cat ${{ steps.analyze.outputs.description_file }})
           FOOTER=$(cat ${{ steps.footer.outputs.file }})
 
           gh pr edit ${{ steps.check-pr.outputs.number }} \
@@ -336,7 +369,7 @@ jobs:
       - name: Create Pull Request
         if: steps.check-pr.outputs.count == '0'
         run: |
-          DESCRIPTION=$(tail -n +2 ${{ steps.analyze.outputs.description_file }})
+          DESCRIPTION=$(cat ${{ steps.analyze.outputs.description_file }})
           FOOTER=$(cat ${{ steps.footer.outputs.file }})
 
           gh pr create \
