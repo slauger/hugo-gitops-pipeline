@@ -269,6 +269,11 @@ jobs:
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v7
+        env:
+          # Der Build-Record ("*.dockerbuild") wandert sonst als Artefakt in den Storage und
+          # bringt seine eigene 90-Tage-Retention mit - nicht die der Organisation.
+          # Nur der Upload faellt weg; die Build-Zusammenfassung im Actions-UI bleibt.
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           file: Dockerfile.generated
