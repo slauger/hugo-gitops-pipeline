@@ -52,7 +52,7 @@ jobs:
 
   build-builder-arm64:
     name: Build Builder (arm64)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       packages: write
@@ -145,7 +145,7 @@ jobs:
 
   build-runtime-arm64:
     name: Build Runtime (arm64)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       packages: write
@@ -238,7 +238,7 @@ jobs:
 
   build-cleanup-arm64:
     name: Build Cleanup (arm64)
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     permissions:
       contents: read
       packages: write
