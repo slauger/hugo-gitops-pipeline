@@ -2,7 +2,7 @@
 # Contains regctl for registry operations and cleanup script
 
 # renovate: datasource=docker depName=ghcr.io/regclient/regctl
-FROM ghcr.io/regclient/regctl:latest@sha256:db2e5f3a5de80b24d53fea5af9edf7021a53f2689f1e166ef2f0e200dad4fb3a AS regctl
+FROM ghcr.io/regclient/regctl:latest@sha256:45b57933c2b67bb1e280b4baaa220ef1ab212c81268ab19589fa1e83719c7c82 AS regctl
 
 # renovate: datasource=docker depName=alpine
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
