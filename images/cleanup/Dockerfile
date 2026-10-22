@@ -5,7 +5,7 @@
 FROM ghcr.io/regclient/regctl:latest@sha256:45b57933c2b67bb1e280b4baaa220ef1ab212c81268ab19589fa1e83719c7c82 AS regctl
 
 # renovate: datasource=docker depName=alpine
-FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24@sha256:c6b073f8e9e58d881f6ffba6ebf3b9ebd60b9e7d6e8337018c0e68bb5c356873
 
 RUN apk add --no-cache \
     bash \
