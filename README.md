@@ -92,6 +92,16 @@ jobs:
 
 **3. Configure secrets and push.**
 
+All jobs run on `ubuntu-latest` by default. To use self-hosted runners, pass a runner
+label, e.g. from a repository or organization variable with a fallback:
+
+```yaml
+    with:
+      runner: ${{ vars.RUNNER_AMD64 || 'ubuntu-latest' }}
+```
+
+The runner needs Docker (the build job uses a job container and Buildx).
+
 ## Documentation
 
 | Guide | Description |

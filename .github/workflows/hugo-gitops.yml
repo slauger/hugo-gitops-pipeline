@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: 'project.json'
+      runner:
+        description: 'Runner label for all jobs, e.g. a self-hosted runner scale set'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
 
     secrets:
       REGISTRY_USERNAME:
@@ -36,7 +41,7 @@ env:
 jobs:
   detect-environment:
     name: Detect Environment
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       environment: ${{ steps.detect.outputs.environment }}
       hugo_environment: ${{ steps.detect.outputs.hugo_environment }}
@@ -155,7 +160,7 @@ jobs:
 
   lint-and-build:
     name: Lint and Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     needs: detect-environment
     container:
       image: ghcr.io/slauger/hugo-gitops-pipeline/builder:latest
@@ -195,7 +200,7 @@ jobs:
 
   build-and-push:
     name: Build and Push Image
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     needs: [detect-environment, lint-and-build]
     if: needs.detect-environment.outputs.should_deploy == 'true'
 
@@ -293,7 +298,7 @@ jobs:
 
   deploy:
     name: Deploy via GitOps
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     needs: [detect-environment, build-and-push]
     if: needs.detect-environment.outputs.should_deploy == 'true'
 
