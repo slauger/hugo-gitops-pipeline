@@ -44,11 +44,12 @@ jobs:
 
       - name: Determine PR direction
         id: pr-config
+        env:
+          GIT_REF: ${{ github.ref }}
+          MAIN_BRANCH: ${{ inputs.main_branch }}
+          DEVELOP_BRANCH: ${{ inputs.develop_branch }}
         run: |
-          REF="${{ github.ref }}"
-          BRANCH_NAME="${REF#refs/heads/}"
-          MAIN_BRANCH="${{ inputs.main_branch }}"
-          DEVELOP_BRANCH="${{ inputs.develop_branch }}"
+          BRANCH_NAME="${GIT_REF#refs/heads/}"
 
           # Determine base branch based on source
           if [ "$BRANCH_NAME" = "$DEVELOP_BRANCH" ]; then
@@ -70,11 +71,11 @@ jobs:
       - name: Check if PR already exists
         id: check-pr
         run: |
-          PR_COUNT=$(gh pr list --base ${{ steps.pr-config.outputs.base }} --head ${{ steps.pr-config.outputs.head }} --state open --json number --jq 'length')
+          PR_COUNT=$(gh pr list --base "${BASE_BRANCH}" --head "${HEAD_BRANCH}" --state open --json number --jq 'length')
           echo "count=$PR_COUNT" >> $GITHUB_OUTPUT
 
           if [ "$PR_COUNT" -gt 0 ]; then
-            PR_NUMBER=$(gh pr list --base ${{ steps.pr-config.outputs.base }} --head ${{ steps.pr-config.outputs.head }} --state open --json number --jq '.[0].number')
+            PR_NUMBER=$(gh pr list --base "${BASE_BRANCH}" --head "${HEAD_BRANCH}" --state open --json number --jq '.[0].number')
             echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
             # Matches both the current marker and the older "GitHub Actions & AI" one
@@ -88,6 +89,8 @@ jobs:
             echo "is_auto=false" >> $GITHUB_OUTPUT
           fi
         env:
+          BASE_BRANCH: ${{ steps.pr-config.outputs.base }}
+          HEAD_BRANCH: ${{ steps.pr-config.outputs.head }}
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
 
       - name: Generate PR description
@@ -102,12 +105,11 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_API_URL: ${{ vars.LLM_API_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          SOURCE: ${{ steps.pr-config.outputs.source }}
+          TARGET: ${{ steps.pr-config.outputs.target }}
+          LANGUAGE: ${{ inputs.language }}
         run: |
-          SOURCE="${{ steps.pr-config.outputs.source }}"
-          TARGET="${{ steps.pr-config.outputs.target }}"
-          LANGUAGE="${{ inputs.language }}"
-
-          git fetch origin $TARGET:$TARGET 2>/dev/null || true
+          git fetch origin "$TARGET:$TARGET" 2>/dev/null || true
 
           FILES_CHANGED=$(git diff $TARGET..HEAD --stat | tail -40)
 
@@ -245,21 +247,30 @@ jobs:
       - name: Build PR title
         if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
         id: extract-title
+        env:
+          IS_RELEASE: ${{ steps.pr-config.outputs.is_release }}
+          SOURCE: ${{ steps.pr-config.outputs.source }}
+          TARGET: ${{ steps.pr-config.outputs.target }}
         run: |
-          if [ "${{ steps.pr-config.outputs.is_release }}" = "true" ]; then
-            TITLE="🚀 Release: ${{ steps.pr-config.outputs.source }} -> ${{ steps.pr-config.outputs.target }}"
+          if [ "${IS_RELEASE}" = "true" ]; then
+            TITLE="🚀 Release: ${SOURCE} -> ${TARGET}"
           else
-            TITLE="🔧 Feature: ${{ steps.pr-config.outputs.source }}"
+            TITLE="🔧 Feature: ${SOURCE}"
           fi
           echo "title=$TITLE" >> $GITHUB_OUTPUT
 
       - name: Build footer
         if: steps.check-pr.outputs.count == '0' || steps.check-pr.outputs.is_auto == 'true'
         id: footer
+        env:
+          SOURCE: ${{ steps.pr-config.outputs.source }}
+          TARGET: ${{ steps.pr-config.outputs.target }}
+          MAIN_BRANCH: ${{ inputs.main_branch }}
+          IS_RELEASE: ${{ steps.pr-config.outputs.is_release }}
+          SITE_URL: ${{ inputs.site_url }}
+          PR_LANGUAGE: ${{ inputs.language }}
         run: |
-          IS_RELEASE="${{ steps.pr-config.outputs.is_release }}"
-          SITE_URL="${{ inputs.site_url }}"
-          LANG="${{ inputs.language }}"
+          LANG="${PR_LANGUAGE}"
 
           if [ "$IS_RELEASE" = "true" ]; then
             if [ "$LANG" = "de" ]; then
@@ -267,8 +278,8 @@ jobs:
 
           ## Deployment Info
 
-          **Source:** \`${{ steps.pr-config.outputs.source }}\` branch
-          **Target:** \`${{ steps.pr-config.outputs.target }}\` branch
+          **Source:** \`${SOURCE}\` branch
+          **Target:** \`${TARGET}\` branch
 
           ### Nach dem Merge:
           - ✅ Production deployment wird ausgelöst"
@@ -291,8 +302,8 @@ jobs:
 
           ## Deployment Info
 
-          **Source:** \`${{ steps.pr-config.outputs.source }}\` branch
-          **Target:** \`${{ steps.pr-config.outputs.target }}\` branch
+          **Source:** \`${SOURCE}\` branch
+          **Target:** \`${TARGET}\` branch
 
           ### After merge:
           - ✅ Production deployment will be triggered"
@@ -317,13 +328,13 @@ jobs:
 
           ## Branch Info
 
-          **Feature Branch:** \`${{ steps.pr-config.outputs.source }}\`
-          **Target:** \`${{ steps.pr-config.outputs.target }}\`
+          **Feature Branch:** \`${SOURCE}\`
+          **Target:** \`${TARGET}\`
 
           ### Nächste Schritte:
           1. Review der Änderungen
           2. Tests prüfen
-          3. Nach Merge: PR zu \`${{ inputs.main_branch }}\` wird erstellt
+          3. Nach Merge: PR zu \`${MAIN_BRANCH}\` wird erstellt
 
           ---
 
@@ -333,13 +344,13 @@ jobs:
 
           ## Branch Info
 
-          **Feature Branch:** \`${{ steps.pr-config.outputs.source }}\`
-          **Target:** \`${{ steps.pr-config.outputs.target }}\`
+          **Feature Branch:** \`${SOURCE}\`
+          **Target:** \`${TARGET}\`
 
           ### Next Steps:
           1. Review changes
           2. Check tests
-          3. After merge: PR to \`${{ inputs.main_branch }}\` will be created
+          3. After merge: PR to \`${MAIN_BRANCH}\` will be created
 
           ---
 
@@ -354,30 +365,39 @@ jobs:
       - name: Update existing PR
         if: steps.check-pr.outputs.count != '0' && steps.check-pr.outputs.is_auto == 'true'
         run: |
-          DESCRIPTION=$(cat ${{ steps.analyze.outputs.description_file }})
-          FOOTER=$(cat ${{ steps.footer.outputs.file }})
+          DESCRIPTION=$(cat "${DESCRIPTION_FILE}")
+          FOOTER=$(cat "${FOOTER_FILE}")
 
-          gh pr edit ${{ steps.check-pr.outputs.number }} \
-            --title "${{ steps.extract-title.outputs.title }}" \
+          gh pr edit "${PR_NUMBER}" \
+            --title "${PR_TITLE}" \
             --body "$DESCRIPTION
 
           $FOOTER
           ⚡ Auto-updated on new commits"
         env:
+          DESCRIPTION_FILE: ${{ steps.analyze.outputs.description_file }}
+          FOOTER_FILE: ${{ steps.footer.outputs.file }}
+          PR_TITLE: ${{ steps.extract-title.outputs.title }}
+          PR_NUMBER: ${{ steps.check-pr.outputs.number }}
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
 
       - name: Create Pull Request
         if: steps.check-pr.outputs.count == '0'
         run: |
-          DESCRIPTION=$(cat ${{ steps.analyze.outputs.description_file }})
-          FOOTER=$(cat ${{ steps.footer.outputs.file }})
+          DESCRIPTION=$(cat "${DESCRIPTION_FILE}")
+          FOOTER=$(cat "${FOOTER_FILE}")
 
           gh pr create \
-            --title "${{ steps.extract-title.outputs.title }}" \
+            --title "${PR_TITLE}" \
             --body "$DESCRIPTION
 
           $FOOTER" \
-            --base ${{ steps.pr-config.outputs.base }} \
-            --head ${{ steps.pr-config.outputs.head }}
+            --base "${BASE_BRANCH}" \
+            --head "${HEAD_BRANCH}"
         env:
+          DESCRIPTION_FILE: ${{ steps.analyze.outputs.description_file }}
+          FOOTER_FILE: ${{ steps.footer.outputs.file }}
+          PR_TITLE: ${{ steps.extract-title.outputs.title }}
+          BASE_BRANCH: ${{ steps.pr-config.outputs.base }}
+          HEAD_BRANCH: ${{ steps.pr-config.outputs.head }}
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
