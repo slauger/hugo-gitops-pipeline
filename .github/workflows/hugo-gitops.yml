@@ -61,19 +61,23 @@ jobs:
 
       - name: Detect environment from project.json
         id: detect
+        env:
+          CONFIG: ${{ inputs.project_config }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          GIT_REF: ${{ github.ref }}
         run: |
-          CONFIG="${{ inputs.project_config }}"
-          EVENT_NAME="${{ github.event_name }}"
-
           # For pull_request events, use head_ref (source branch) for matching
           # For push events, use the actual ref
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            REF="refs/heads/${{ github.head_ref }}"
+            REF="refs/heads/${HEAD_REF}"
             DEPLOY_ALLOWED="false"
           else
-            REF="${{ github.ref }}"
+            REF="${GIT_REF}"
             DEPLOY_ALLOWED="true"
           fi
+          # Values are read from the environment inside node, never interpolated into the script
+          export REF DEPLOY_ALLOWED
 
           if [ ! -f "$CONFIG" ]; then
             echo "::error::Config file $CONFIG not found"
@@ -83,9 +87,9 @@ jobs:
           # Find matching environment
           RESULT=$(node -e "
             const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('$CONFIG'));
-            const ref = '$REF';
-            const deployAllowed = '$DEPLOY_ALLOWED' === 'true';
+            const config = JSON.parse(fs.readFileSync(process.env.CONFIG));
+            const ref = process.env.REF;
+            const deployAllowed = process.env.DEPLOY_ALLOWED === 'true';
 
             let matched = null;
             for (const [name, env] of Object.entries(config.environments || {})) {
@@ -148,15 +152,31 @@ jobs:
           echo "gitops_owner=$(echo $RESULT | jq -r '.gitops_owner')" >> $GITHUB_OUTPUT
 
       - name: Environment summary
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GIT_REF: ${{ github.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          DETECTED_ENVIRONMENT: ${{ steps.detect.outputs.environment }}
+          HUGO_ENVIRONMENT: ${{ steps.detect.outputs.hugo_environment }}
+          BASEURL: ${{ steps.detect.outputs.baseurl || '(from Hugo config)' }}
+          SHOULD_DEPLOY: ${{ steps.detect.outputs.should_deploy }}
         run: |
-          echo "## Environment Detection" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Event:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Ref:** \`${{ github.ref }}\`${{ github.event_name == 'pull_request' && format(' (head: {0})', github.head_ref) || '' }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** \`${{ steps.detect.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Hugo Environment:** \`${{ steps.detect.outputs.hugo_environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Base URL:** \`${{ steps.detect.outputs.baseurl || '(from Hugo config)' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Should Deploy:** \`${{ steps.detect.outputs.should_deploy }}\`${{ github.event_name == 'pull_request' && ' (disabled for PRs)' || '' }}" >> $GITHUB_STEP_SUMMARY
+          REF_SUFFIX=""
+          DEPLOY_SUFFIX=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            REF_SUFFIX=" (head: ${HEAD_REF})"
+            DEPLOY_SUFFIX=" (disabled for PRs)"
+          fi
+          {
+            echo "## Environment Detection"
+            echo ""
+            echo "**Event:** \`${EVENT_NAME}\`"
+            echo "**Ref:** \`${GIT_REF}\`${REF_SUFFIX}"
+            echo "**Environment:** \`${DETECTED_ENVIRONMENT}\`"
+            echo "**Hugo Environment:** \`${HUGO_ENVIRONMENT}\`"
+            echo "**Base URL:** \`${BASEURL}\`"
+            echo "**Should Deploy:** \`${SHOULD_DEPLOY}\`${DEPLOY_SUFFIX}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   lint-and-build:
     name: Lint and Build
@@ -170,7 +190,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run build phase
-        run: run-phase build ${{ inputs.project_config }}
+        run: run-phase build "${CONFIG}"
         env:
           CONFIG: ${{ inputs.project_config }}
           ENVIRONMENT: ${{ needs.detect-environment.outputs.hugo_environment }}
@@ -178,14 +198,14 @@ jobs:
           OUTPUT: ${{ needs.detect-environment.outputs.output }}
 
       - name: Run lint phase
-        run: run-phase lint ${{ inputs.project_config }}
+        run: run-phase lint "${CONFIG}"
         env:
           CONFIG: ${{ inputs.project_config }}
           HUGO_SOURCE: ${{ needs.detect-environment.outputs.hugo_source }}
           OUTPUT: ${{ needs.detect-environment.outputs.output }}
 
       - name: Run test phase
-        run: run-phase test ${{ inputs.project_config }}
+        run: run-phase test "${CONFIG}"
         env:
           CONFIG: ${{ inputs.project_config }}
           HUGO_SOURCE: ${{ needs.detect-environment.outputs.hugo_source }}
@@ -220,7 +240,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Download images.json from latest release
-          ASSET_URL=$(gh release view --repo ${{ env.PIPELINE_REPO }} --json assets -q '.assets[] | select(.name=="images.json") | .url')
+          ASSET_URL=$(gh release view --repo "${PIPELINE_REPO}" --json assets -q '.assets[] | select(.name=="images.json") | .url')
 
           if [ -n "$ASSET_URL" ]; then
             IMAGES=$(curl -sL -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL")
@@ -253,21 +273,27 @@ jobs:
             type=raw,value=${{ needs.detect-environment.outputs.environment }}-latest
 
       - name: Generate Dockerfile
+        env:
+          PROJECT_CONFIG: ${{ inputs.project_config }}
+          HUGO_ENVIRONMENT: ${{ needs.detect-environment.outputs.hugo_environment }}
+          HUGO_SOURCE: ${{ needs.detect-environment.outputs.hugo_source }}
+          OUTPUT_DIR: ${{ needs.detect-environment.outputs.output }}
+          BASEURL: ${{ needs.detect-environment.outputs.baseurl }}
         run: |
           cat > Dockerfile.generated <<EOF
-          FROM ${{ env.BUILDER_IMAGE }} AS builder
+          FROM ${BUILDER_IMAGE} AS builder
           WORKDIR /build
           COPY . .
-          ENV CONFIG=${{ inputs.project_config }}
-          ENV ENVIRONMENT=${{ needs.detect-environment.outputs.hugo_environment }}
-          ENV HUGO_SOURCE=${{ needs.detect-environment.outputs.hugo_source }}
-          ENV OUTPUT=${{ needs.detect-environment.outputs.output }}
-          ENV BASEURL=${{ needs.detect-environment.outputs.baseurl }}
-          RUN run-phase build ${{ inputs.project_config }}
+          ENV CONFIG=${PROJECT_CONFIG}
+          ENV ENVIRONMENT=${HUGO_ENVIRONMENT}
+          ENV HUGO_SOURCE=${HUGO_SOURCE}
+          ENV OUTPUT=${OUTPUT_DIR}
+          ENV BASEURL=${BASEURL}
+          RUN run-phase build ${PROJECT_CONFIG}
           RUN mkdir -p /nginx-config && if [ -d nginx ]; then cp -r nginx/* /nginx-config/; fi
 
-          FROM ${{ env.RUNTIME_IMAGE }}
-          COPY --from=builder /build/${{ needs.detect-environment.outputs.hugo_source }}/${{ needs.detect-environment.outputs.output }} /usr/share/nginx/html
+          FROM ${RUNTIME_IMAGE}
+          COPY --from=builder /build/${HUGO_SOURCE}/${OUTPUT_DIR} /usr/share/nginx/html
           COPY --from=builder /nginx-config/ /etc/nginx/conf.d/
           EOF
 
@@ -288,13 +314,19 @@ jobs:
           platforms: linux/amd64
 
       - name: Build summary
+        env:
+          DETECTED_ENVIRONMENT: ${{ needs.detect-environment.outputs.environment }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           echo "## Docker Image Built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** \`${{ needs.detect-environment.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ inputs.registry }}/${{ inputs.image_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:** \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Digest:** \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${DETECTED_ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${REGISTRY}/${IMAGE_NAME}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** \`${IMAGE_TAGS}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
 
   deploy:
     name: Deploy via GitOps
@@ -316,12 +348,12 @@ jobs:
           repositories: ${{ needs.detect-environment.outputs.gitops_repo_name }}
 
       - name: Generate gitops-image-replacer config
+        env:
+          CONFIG: ${{ inputs.project_config }}
         run: |
-          CONFIG="${{ inputs.project_config }}"
-
           node -e "
             const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('$CONFIG'));
+            const config = JSON.parse(fs.readFileSync(process.env.CONFIG));
 
             const gitopsConfig = {
               'gitops-image-replacer': Object.entries(config.environments || {}).map(([name, env]) => ({
@@ -344,20 +376,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GIT_REF: ${{ github.ref }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+          IMAGE_DIGEST: ${{ needs.build-and-push.outputs.image-digest }}
+          REGISTRY: ${{ inputs.registry }}
+          IMAGE_NAME: ${{ inputs.image_name }}
         run: |
-          IMAGE_TAG="${{ needs.build-and-push.outputs.image-tag }}"
-          IMAGE_DIGEST="${{ needs.build-and-push.outputs.image-digest }}"
-          IMAGE_FULL="${{ inputs.registry }}/${{ inputs.image_name }}:${IMAGE_TAG}@${IMAGE_DIGEST}"
+          IMAGE_FULL="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}@${IMAGE_DIGEST}"
 
           echo "Updating image to: ${IMAGE_FULL}"
           gitops-image-replacer --ci --apply "${IMAGE_FULL}"
 
       - name: Deployment summary
+        env:
+          DETECTED_ENVIRONMENT: ${{ needs.detect-environment.outputs.environment }}
+          GITOPS_REPOSITORY: ${{ needs.detect-environment.outputs.gitops_repository }}
+          GITOPS_FILE: ${{ needs.detect-environment.outputs.gitops_file }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+          IMAGE_DIGEST: ${{ needs.build-and-push.outputs.image-digest }}
         run: |
           echo "## GitOps Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** \`${{ needs.detect-environment.outputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**GitOps Repo:** \`${{ needs.detect-environment.outputs.gitops_repository }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**GitOps File:** \`${{ needs.detect-environment.outputs.gitops_file }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Image Tag:** \`${{ needs.build-and-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Image Digest:** \`${{ needs.build-and-push.outputs.image-digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${DETECTED_ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**GitOps Repo:** \`${GITOPS_REPOSITORY}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**GitOps File:** \`${GITOPS_FILE}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag:** \`${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Digest:** \`${IMAGE_DIGEST}\`" >> $GITHUB_STEP_SUMMARY

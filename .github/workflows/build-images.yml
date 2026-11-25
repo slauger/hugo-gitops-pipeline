@@ -37,7 +37,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -68,7 +68,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -95,12 +95,14 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Create and push manifest
         id: manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/builder"
-          VERSION="v${{ inputs.version }}"
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}/builder"
+          VERSION="v${INPUT_VERSION}"
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
@@ -130,7 +132,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -161,7 +163,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -188,12 +190,14 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Create and push manifest
         id: manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/runtime"
-          VERSION="v${{ inputs.version }}"
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}/runtime"
+          VERSION="v${INPUT_VERSION}"
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
@@ -223,7 +227,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -254,7 +258,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v7
@@ -281,12 +285,14 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
       - name: Create and push manifest
         id: manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/cleanup"
-          VERSION="v${{ inputs.version }}"
+          IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}/cleanup"
+          VERSION="v${INPUT_VERSION}"
           docker manifest create ${IMAGE}:${VERSION} \
             ${IMAGE}:${VERSION}-linux-amd64 \
             ${IMAGE}:${VERSION}-linux-arm64
@@ -316,60 +322,70 @@ jobs:
 
     steps:
       - name: Create images.json
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          BUILDER_DIGEST: ${{ needs.manifest-builder.outputs.digest }}
+          BUILDER_AMD64_DIGEST: ${{ needs.build-builder-amd64.outputs.digest }}
+          BUILDER_ARM64_DIGEST: ${{ needs.build-builder-arm64.outputs.digest }}
+          RUNTIME_DIGEST: ${{ needs.manifest-runtime.outputs.digest }}
+          RUNTIME_AMD64_DIGEST: ${{ needs.build-runtime-amd64.outputs.digest }}
+          RUNTIME_ARM64_DIGEST: ${{ needs.build-runtime-arm64.outputs.digest }}
+          CLEANUP_DIGEST: ${{ needs.manifest-cleanup.outputs.digest }}
+          CLEANUP_AMD64_DIGEST: ${{ needs.build-cleanup-amd64.outputs.digest }}
+          CLEANUP_ARM64_DIGEST: ${{ needs.build-cleanup-arm64.outputs.digest }}
         run: |
-          VERSION="v${{ inputs.version }}"
-          REGISTRY="${{ env.REGISTRY }}"
-          REPO="${{ github.repository }}"
+          VERSION="v${INPUT_VERSION}"
+          REPO="${GITHUB_REPOSITORY}"
 
           cat > images.json <<EOF
           {
             "\$schema": "https://slauger.github.io/hugo-gitops-pipeline/images.schema.json",
-            "version": "${{ inputs.version }}",
+            "version": "${INPUT_VERSION}",
             "builder": {
               "image": "${REGISTRY}/${REPO}/builder",
               "tag": "${VERSION}",
-              "digest": "${{ needs.manifest-builder.outputs.digest }}",
-              "full": "${REGISTRY}/${REPO}/builder:${VERSION}@${{ needs.manifest-builder.outputs.digest }}",
+              "digest": "${BUILDER_DIGEST}",
+              "full": "${REGISTRY}/${REPO}/builder:${VERSION}@${BUILDER_DIGEST}",
               "platforms": {
                 "linux/amd64": {
-                  "digest": "${{ needs.build-builder-amd64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/builder:${VERSION}-linux-amd64@${{ needs.build-builder-amd64.outputs.digest }}"
+                  "digest": "${BUILDER_AMD64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/builder:${VERSION}-linux-amd64@${BUILDER_AMD64_DIGEST}"
                 },
                 "linux/arm64": {
-                  "digest": "${{ needs.build-builder-arm64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/builder:${VERSION}-linux-arm64@${{ needs.build-builder-arm64.outputs.digest }}"
+                  "digest": "${BUILDER_ARM64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/builder:${VERSION}-linux-arm64@${BUILDER_ARM64_DIGEST}"
                 }
               }
             },
             "runtime": {
               "image": "${REGISTRY}/${REPO}/runtime",
               "tag": "${VERSION}",
-              "digest": "${{ needs.manifest-runtime.outputs.digest }}",
-              "full": "${REGISTRY}/${REPO}/runtime:${VERSION}@${{ needs.manifest-runtime.outputs.digest }}",
+              "digest": "${RUNTIME_DIGEST}",
+              "full": "${REGISTRY}/${REPO}/runtime:${VERSION}@${RUNTIME_DIGEST}",
               "platforms": {
                 "linux/amd64": {
-                  "digest": "${{ needs.build-runtime-amd64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/runtime:${VERSION}-linux-amd64@${{ needs.build-runtime-amd64.outputs.digest }}"
+                  "digest": "${RUNTIME_AMD64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/runtime:${VERSION}-linux-amd64@${RUNTIME_AMD64_DIGEST}"
                 },
                 "linux/arm64": {
-                  "digest": "${{ needs.build-runtime-arm64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/runtime:${VERSION}-linux-arm64@${{ needs.build-runtime-arm64.outputs.digest }}"
+                  "digest": "${RUNTIME_ARM64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/runtime:${VERSION}-linux-arm64@${RUNTIME_ARM64_DIGEST}"
                 }
               }
             },
             "cleanup": {
               "image": "${REGISTRY}/${REPO}/cleanup",
               "tag": "${VERSION}",
-              "digest": "${{ needs.manifest-cleanup.outputs.digest }}",
-              "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}@${{ needs.manifest-cleanup.outputs.digest }}",
+              "digest": "${CLEANUP_DIGEST}",
+              "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}@${CLEANUP_DIGEST}",
               "platforms": {
                 "linux/amd64": {
-                  "digest": "${{ needs.build-cleanup-amd64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}-linux-amd64@${{ needs.build-cleanup-amd64.outputs.digest }}"
+                  "digest": "${CLEANUP_AMD64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}-linux-amd64@${CLEANUP_AMD64_DIGEST}"
                 },
                 "linux/arm64": {
-                  "digest": "${{ needs.build-cleanup-arm64.outputs.digest }}",
-                  "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}-linux-arm64@${{ needs.build-cleanup-arm64.outputs.digest }}"
+                  "digest": "${CLEANUP_ARM64_DIGEST}",
+                  "full": "${REGISTRY}/${REPO}/cleanup:${VERSION}-linux-arm64@${CLEANUP_ARM64_DIGEST}"
                 }
               }
             }
@@ -381,5 +397,6 @@ jobs:
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          gh release upload "v${{ inputs.version }}" images.json --repo ${{ github.repository }} --clobber
+          gh release upload "v${INPUT_VERSION}" images.json --repo "${GITHUB_REPOSITORY}" --clobber
