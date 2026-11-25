@@ -59,7 +59,7 @@ on:
 
 jobs:
   pipeline:
-    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
     with:
       registry: registry.example.com
       image_name: my-hugo-site
@@ -94,7 +94,7 @@ GitHub Actions provides two ways to pass secrets to reusable workflows:
     ```yaml
     jobs:
       pipeline:
-        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
         with:
           registry: registry.example.com
           image_name: my-hugo-site
@@ -108,7 +108,7 @@ GitHub Actions provides two ways to pass secrets to reusable workflows:
     ```yaml
     jobs:
       pipeline:
-        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
         with:
           registry: registry.example.com
           image_name: my-hugo-site
