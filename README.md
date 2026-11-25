@@ -83,17 +83,22 @@ on:
 
 jobs:
   pipeline:
-    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
     with:
       registry: registry.example.com
       image_name: my-hugo-site
-    secrets: inherit
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      GITOPS_APP_ID: ${{ secrets.GITOPS_APP_ID }}
+      GITOPS_APP_PRIVATE_KEY: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
 ```
 
 **3. Configure secrets and push.**
 
-All jobs run on `ubuntu-latest` by default. To use self-hosted runners, pass a runner
-label, e.g. from a repository or organization variable with a fallback:
+The examples reference `@main`, which always follows the latest state of the pipeline. For reproducible builds, pin a release tag instead (e.g. `@v1.11.71`, see [Releases](https://github.com/slauger/hugo-gitops-pipeline/releases)). There is no floating `v1` tag.
+
+All jobs run on `ubuntu-latest` by default. To use self-hosted runners, pass a runner label, e.g. from a repository or organization variable with a fallback:
 
 ```yaml
     with:

@@ -3,13 +3,14 @@
   "extends": [
     "config:recommended",
     ":semanticCommits",
-    ":semanticCommitTypeAll(fix)"
+    ":semanticCommitTypeAll(fix)",
+    "helpers:pinGitHubActionDigests"
   ],
+  "minimumReleaseAge": "3 days",
   "automerge": true,
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "platformAutomerge": false,
-  "ignoreTests": true,
   "packageRules": [
     {
       "matchManagers": ["dockerfile"],
@@ -30,12 +31,17 @@
     {
       "matchDepNames": ["gohugoio/hugo"],
       "groupName": "hugo"
+    },
+    {
+      "description": "Major updates need a manual review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["images/builder/Dockerfile"],
+      "managerFilePatterns": ["/images/builder/Dockerfile/"],
       "matchStrings": ["ARG HUGO_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "depNameTemplate": "gohugoio/hugo",
       "datasourceTemplate": "github-releases",
@@ -43,7 +49,7 @@
     },
     {
       "customType": "regex",
-      "fileMatch": ["\\.ya?ml$"],
+      "managerFilePatterns": ["/\\.ya?ml$/"],
       "matchStrings": ["pip install gitops-image-replacer==(?<currentValue>[^\\s]+)"],
       "depNameTemplate": "gitops-image-replacer",
       "datasourceTemplate": "pypi"

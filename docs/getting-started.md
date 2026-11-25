@@ -59,11 +59,15 @@ on:
 
 jobs:
   pipeline:
-    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+    uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
     with:
       registry: registry.example.com
       image_name: my-hugo-site
-    secrets: inherit
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      GITOPS_APP_ID: ${{ secrets.GITOPS_APP_ID }}
+      GITOPS_APP_PRIVATE_KEY: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
 ```
 
 ## Step 3: Configure Secrets {#configure-secrets}
@@ -90,7 +94,7 @@ GitHub Actions provides two ways to pass secrets to reusable workflows:
     ```yaml
     jobs:
       pipeline:
-        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
         with:
           registry: registry.example.com
           image_name: my-hugo-site
@@ -104,7 +108,7 @@ GitHub Actions provides two ways to pass secrets to reusable workflows:
     ```yaml
     jobs:
       pipeline:
-        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@v1
+        uses: slauger/hugo-gitops-pipeline/.github/workflows/hugo-gitops.yml@main
         with:
           registry: registry.example.com
           image_name: my-hugo-site
